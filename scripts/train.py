@@ -20,7 +20,6 @@ from torchvision.utils import make_grid, save_image
 from p2igan_bench.data.dataloader import P2IDataModule
 from p2igan_bench.models import build_discriminator, build_generator
 from p2igan_bench.modules import ReconstructionLoss, gan_loss
-from p2igan_bench.metrics import MetricConfig, RainfallMetricSuite
 
 
 def parse_args() -> argparse.Namespace:
@@ -48,19 +47,6 @@ def parse_args() -> argparse.Namespace:
         help="Skip validation during training (overrides config).",
     )
     parser.set_defaults(run_validation=None)
-    parser.add_argument(
-        "--run-test",
-        dest="run_test",
-        action="store_true",
-        help="Run test evaluation after training (overrides config).",
-    )
-    parser.add_argument(
-        "--skip-test",
-        dest="run_test",
-        action="store_false",
-        help="Skip test evaluation after training (overrides config).",
-    )
-    parser.set_defaults(run_test=None)
     return parser.parse_args()
 
 
@@ -105,15 +91,12 @@ class Trainer:
         self.data_module = P2IDataModule(cfg)
         self.train_loader = self.data_module.train_dataloader()
         self.val_loader = self.data_module.val_dataloader()
-        self.test_loader = self.data_module.test_dataloader()
         train_cfg = cfg.get("train", {})
         self.run_validation = bool(train_cfg.get("use_validation", True))
-        self.run_test = bool(train_cfg.get("use_test", True))
         logging.info(
-            "Data loaders ready | train=%s, val=%s, test=%s",
+            "Data loaders ready | train=%s, val=%s",
             len(self.train_loader) if self.train_loader is not None else 0,
             len(self.val_loader) if self.val_loader is not None else 0,
-            len(self.test_loader) if self.test_loader is not None else 0,
         )
         self.train_steps_per_epoch = max(1, len(self.train_loader))
 
@@ -163,13 +146,9 @@ class Trainer:
             self.max_steps = self.max_epochs * max(1, len(self.train_loader))
 
         self.best_val = float("inf")
-        self.test_interval = int(train_cfg.get("test_interval", 20))
         self.last_rec_loss = 0.0
         self.last_adv_loss = 0.0
         self.last_dis_loss = 0.0
-        metric_cfg = MetricConfig()
-        self.val_metrics = RainfallMetricSuite(metric_cfg).to(self.device)
-        self.test_metrics = RainfallMetricSuite(metric_cfg).to(self.device)
         viz_cfg = cfg.get("viz", {})
         self.viz_scale = str(viz_cfg.get("scale", "gt_pred")).lower()
         self.viz_vmin = viz_cfg.get("vmin")
@@ -247,7 +226,6 @@ class Trainer:
             rec_loss_val = float(loss_g.detach())
             rec_running += rec_loss_val
             adv_loss_val = 0.0
-            dis_loss_val = 0.0
 
             if steps == 0:
                 logging.info(
@@ -502,8 +480,6 @@ def main(args: Optional[argparse.Namespace] = None) -> None:
         mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
     if parsed.run_validation is not None:
         train_cfg["use_validation"] = bool(parsed.run_validation)
-    if parsed.run_test is not None:
-        train_cfg["use_test"] = bool(parsed.run_test)
 
     trainer = Trainer(config)
     trainer.train()

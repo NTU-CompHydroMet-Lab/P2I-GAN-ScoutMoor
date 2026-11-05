@@ -15,6 +15,8 @@ import pytest
 import torch
 import zarr
 
+from p2igan_bench.models import build_generator
+
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_DIR = ROOT / "p2igan_bench" / "config"
 
@@ -48,9 +50,8 @@ def in_root(monkeypatch):
 def test_checkpoint_loads_strictly(config_name, in_root):
     ckpt_path = CHECKPOINTS[config_name]
     _require(ckpt_path)
-    infer = _load_script("infer")
     cfg = json.loads((CONFIG_DIR / config_name).read_text())
-    generator = infer.build_generator_for_inference(cfg)
+    generator = build_generator(cfg)
     state = torch.load(ckpt_path, map_location="cpu", weights_only=True)
     generator.load_state_dict(state["generator"], strict=True)
 

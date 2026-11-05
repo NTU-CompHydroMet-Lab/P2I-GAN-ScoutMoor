@@ -4,7 +4,7 @@ import os
 
 from .config import build_config, get_mode_config
 from .exp1 import run_exp1
-from .exp2 import run_exp2, run_exp2_paper, run_exp2_paper_zarr
+from .exp2 import run_exp2, run_exp2_paper_zarr
 from .exp3 import run_exp3
 from .io import ensure_dir, load_mask, load_zarr_array, save_config_snapshot, save_json, save_text
 

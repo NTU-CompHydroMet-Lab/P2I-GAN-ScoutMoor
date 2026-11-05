@@ -16,7 +16,7 @@ class ModeConfig:
 class ExperimentConfig:
     experiment_name: str = "exp2_test"
     description: str = "fix keep method."
-    save_dir: str = "results"
+    save_dir: str = "experiments/results"
     mode: str = "gauge"  # "radar" or "gauge"
     run_exp1: bool = False
     run_exp2_gif: bool = False

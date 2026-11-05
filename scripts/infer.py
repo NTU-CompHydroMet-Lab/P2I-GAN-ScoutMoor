@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import random
 import time
 from pathlib import Path
@@ -14,7 +13,7 @@ import torch
 import zarr
 
 from p2igan_bench.data.dataloader import P2IDataModule
-from p2igan_bench.models import DKGenerator, P2IGenerator, STDKGenerator, build_generator
+from p2igan_bench.models import build_generator
 
 
 def parse_args() -> argparse.Namespace:
@@ -80,32 +79,6 @@ def resolve_checkpoint(cfg: Dict[str, Any], args: argparse.Namespace) -> Path:
     raise FileNotFoundError(f"Checkpoint not found under {base_dir}")
 
 
-def build_generator_for_inference(cfg: Dict[str, Any]) -> torch.nn.Module:
-    model_cfg = cfg.get("model", {})
-    model_name = model_cfg.get("name", "simple").lower()
-
-    if model_name == "p2igan":
-        return P2IGenerator(cfg)
-    if model_name == "dk":
-        data_cfg = cfg.get("data", {})
-        sample_length = (
-            data_cfg.get("test", {}).get("sample_length")
-            or data_cfg.get("train", {}).get("sample_length")
-            or 16
-        )
-        return DKGenerator(cfg, length=sample_length)
-    if model_name == "stdk":
-        data_cfg = cfg.get("data", {})
-        sample_length = (
-            data_cfg.get("test", {}).get("sample_length")
-            or data_cfg.get("train", {}).get("sample_length")
-            or 16
-        )
-        return STDKGenerator(cfg, length=sample_length)
-
-    return build_generator(cfg)
-
-
 def prepare_batch(batch, device: torch.device):
     frames, masked_frames, masks = batch
     frames = frames.permute(0, 1, 4, 2, 3).to(device, non_blocking=True)
@@ -149,7 +122,7 @@ def main(args: Optional[argparse.Namespace] = None) -> None:
     if num_samples == 0:
         raise RuntimeError("Test dataset is empty.")
 
-    model_name = cfg.get("model", {}).get("name", "model")
+    model_name = cfg["model"]["name"]
     output_path = parsed.output
     if output_path is None:
         save_dir = Path(parsed.model_dir or cfg.get("save_dir", "weights"))
@@ -179,7 +152,7 @@ def main(args: Optional[argparse.Namespace] = None) -> None:
     if hasattr(dataset, "video_files"):
         group.attrs["files"] = [str(p) for p in dataset.video_files]
 
-    generator = build_generator_for_inference(cfg).to(device)
+    generator = build_generator(cfg).to(device)
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=True)
     state_dict = checkpoint["generator"] if isinstance(checkpoint, dict) and "generator" in checkpoint else checkpoint
     generator.load_state_dict(state_dict)

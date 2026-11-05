@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .deconv_pytorch import DOConv2d, DOConv2d_eval
+from .deconv_pytorch import DOConv2d
 
 
 class BaseNetwork(nn.Module):
@@ -40,31 +40,6 @@ class BaseNetwork(nn.Module):
         self.apply(init_func)
 
 
-class BasicConv(nn.Module):
-    def __init__(self, in_channel, out_channel, kernel_size, stride=1, bias=False, norm=False, relu=True, transpose=False,
-                 groups=1, norm_method=nn.BatchNorm2d):
-        super().__init__()
-        if bias and norm:
-            bias = False
-
-        padding = kernel_size // 2
-        layers: List[nn.Module] = []
-        if transpose:
-            padding = kernel_size // 2 - 1
-            layers.append(nn.ConvTranspose2d(in_channel, out_channel, kernel_size, padding=padding, stride=stride, bias=bias))
-        else:
-            layers.append(nn.Conv2d(in_channel, out_channel, kernel_size, padding=padding, stride=stride, bias=bias, groups=groups))
-        if norm:
-            layers.append(norm_method(out_channel))
-        if relu:
-            layers.append(nn.ReLU(inplace=True))
-
-        self.main = nn.Sequential(*layers)
-
-    def forward(self, x):
-        return self.main(x)
-
-
 class BasicConv_do(nn.Module):
     def __init__(self, in_channel, out_channel, kernel_size, stride=1, bias=False, norm=False, relu=True, transpose=False,
                  relu_method=nn.ReLU, groups=1, norm_method=nn.BatchNorm2d):
@@ -94,35 +69,6 @@ class BasicConv_do(nn.Module):
         return self.main(x)
 
 
-class BasicConv_do_eval(nn.Module):
-    def __init__(self, in_channel, out_channel, kernel_size, stride=1, bias=False, norm=False, relu=True, transpose=False,
-                 relu_method=nn.ReLU, groups=1, norm_method=nn.BatchNorm2d):
-        super().__init__()
-        if bias and norm:
-            bias = False
-
-        padding = kernel_size // 2
-        layers: List[nn.Module] = []
-        if transpose:
-            padding = kernel_size // 2 - 1
-            layers.append(nn.ConvTranspose2d(in_channel, out_channel, kernel_size, padding=padding, stride=stride, bias=bias))
-        else:
-            layers.append(DOConv2d_eval(in_channel, out_channel, kernel_size, padding=padding, stride=stride, bias=bias, groups=groups))
-        if norm:
-            layers.append(norm_method(out_channel))
-        if relu:
-            if relu_method == nn.ReLU:
-                layers.append(nn.ReLU(inplace=True))
-            elif relu_method == nn.LeakyReLU:
-                layers.append(nn.LeakyReLU(inplace=True))
-            else:
-                layers.append(relu_method())
-        self.main = nn.Sequential(*layers)
-
-    def forward(self, x):
-        return self.main(x)
-
-
 class ResBlock_do(nn.Module):
     def __init__(self, out_channel):
         super().__init__()
@@ -133,68 +79,6 @@ class ResBlock_do(nn.Module):
 
     def forward(self, x):
         return self.main(x) + x
-
-
-class ResBlock_do_eval(nn.Module):
-    def __init__(self, out_channel):
-        super().__init__()
-        self.main = nn.Sequential(
-            BasicConv_do_eval(out_channel, out_channel, kernel_size=3, stride=1, relu=True),
-            BasicConv_do_eval(out_channel, out_channel, kernel_size=3, stride=1, relu=False),
-        )
-
-    def forward(self, x):
-        return self.main(x) + x
-
-
-class ResBlock_do_fft_bench(nn.Module):
-    def __init__(self, out_channel, norm: str = "backward"):
-        super().__init__()
-        self.main = nn.Sequential(
-            BasicConv_do(out_channel, out_channel, kernel_size=3, stride=1, relu=True),
-            BasicConv_do(out_channel, out_channel, kernel_size=3, stride=1, relu=False),
-        )
-        self.main_fft = nn.Sequential(
-            BasicConv_do(out_channel * 2, out_channel * 2, kernel_size=1, stride=1, groups=16, relu=True),
-            BasicConv_do(out_channel * 2, out_channel * 2, kernel_size=1, stride=1, groups=16, relu=False),
-        )
-        self.norm = norm
-
-    def forward(self, x):
-        _, _, H, W = x.shape
-        dim = 1
-        y = torch.fft.rfft2(x, norm=self.norm)
-        y_f = torch.cat([y.real, y.imag], dim=dim)
-        y = self.main_fft(y_f)
-        y_real, y_imag = torch.chunk(y, 2, dim=dim)
-        y = torch.complex(y_real, y_imag)
-        y = torch.fft.irfft2(y, s=(H, W), norm=self.norm)
-        return self.main(x) + x + y
-
-
-class ResBlock_do_fft_bench_eval(nn.Module):
-    def __init__(self, out_channel, norm: str = "backward"):
-        super().__init__()
-        self.main = nn.Sequential(
-            BasicConv_do_eval(out_channel, out_channel, kernel_size=3, stride=1, relu=True),
-            BasicConv_do_eval(out_channel, out_channel, kernel_size=3, stride=1, relu=False),
-        )
-        self.main_fft = nn.Sequential(
-            BasicConv_do_eval(out_channel * 2, out_channel * 2, kernel_size=1, stride=1, relu=True),
-            BasicConv_do_eval(out_channel * 2, out_channel * 2, kernel_size=1, stride=1, relu=False),
-        )
-        self.norm = norm
-
-    def forward(self, x):
-        _, _, H, W = x.shape
-        dim = 1
-        y = torch.fft.rfft2(x, norm=self.norm)
-        y_f = torch.cat([y.real, y.imag], dim=dim)
-        y = self.main_fft(y_f)
-        y_real, y_imag = torch.chunk(y, 2, dim=dim)
-        y = torch.complex(y_real, y_imag)
-        y = torch.fft.irfft2(y, s=(H, W), norm=self.norm)
-        return self.main(x) + x + y
 
 
 class DownsampleDuplicateChannels(nn.Module):
@@ -212,32 +96,6 @@ class DownsampleDuplicateChannels(nn.Module):
         x = x.repeat_interleave(2, dim=1)
         x = x.view(b, self.t * (c // self.t) * 2, h // 2, w // 2)
         return x
-
-
-class LayerNorm2d(nn.Module):
-    def __init__(self, channels):
-        super().__init__()
-        self.norm = nn.GroupNorm(1, channels)
-
-    def forward(self, x):
-        return self.norm(x)
-
-
-class STABEDBlock(nn.Module):
-    def __init__(self, cin, cout):
-        super().__init__()
-        self.double_conv = nn.Sequential(
-            LayerNorm2d(cin),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(cin, cout, kernel_size=3, padding=1),
-        )
-        self.single_conv = nn.Sequential(
-            LayerNorm2d(cin),
-            nn.Conv2d(cin, cout, kernel_size=3, padding=1),
-        )
-
-    def forward(self, inp):
-        return self.double_conv(inp) + self.single_conv(inp)
 
 
 _GRID_CACHE: Dict[Tuple[int, int, int, str, torch.dtype], torch.Tensor] = {}
@@ -361,26 +219,6 @@ class InputBlock(nn.Module):
         return torch.cat(outputs, dim=0)
 
 
-class fft_bench_complex_conv(nn.Module):
-    def __init__(self, dim, dw=1, norm="backward", act_method=nn.ReLU, bias=False):
-        super().__init__()
-        self.act_fft = act_method()
-        hid_dim = int(dim * dw)
-        self.complex_conv1 = nn.Conv2d(dim * 2, hid_dim * 2, kernel_size=1, bias=bias)
-        self.complex_conv2 = nn.Conv2d(hid_dim * 2, dim * 2, kernel_size=1, bias=bias)
-        self.norm = norm
-
-    def forward(self, x):
-        _, _, H, W = x.shape
-        y = torch.fft.rfft2(x, norm=self.norm)
-        y = self.complex_conv1(torch.cat([y.real, y.imag], dim=1))
-        y = self.act_fft(y)
-        y_real, y_imag = self.complex_conv2(y).chunk(2, dim=1)
-        y = torch.complex(y_real, y_imag)
-        y = torch.fft.irfft2(y, s=(H, W), norm=self.norm)
-        return y
-
-
 class UPPos(nn.Module):
     def __init__(self, in_ch, out_ch, T, H, W):
         super().__init__()
@@ -423,18 +261,12 @@ def C3(cin, cout, kt=3, ks=3, st=(1, 1, 1), pt=(1, 1, 1)):
 
 __all__ = [
     "BaseNetwork",
-    "BasicConv",
     "BasicConv_do",
-    "BasicConv_do_eval",
     "ResBlock_do",
-    "ResBlock_do_eval",
-    "ResBlock_do_fft_bench",
-    "ResBlock_do_fft_bench_eval",
     "DownsampleDuplicateChannels",
-    "LayerNorm2d",
-    "STABEDBlock",
     "InputBlock",
     "UPPos",
+    "UP",
     "C2",
     "C3",
 ]

@@ -103,12 +103,11 @@ class STDKGenerator(BaseNetwork):
     - MLP : shared (100–100–100–1)
     """
 
-    def __init__(self, config, length=16, inference=False, init_weights=True,
+    def __init__(self, config, length=16, init_weights=True,
                  num_basis_space=(10, 19, 37, 73),
                  num_basis_time=(10, 19, 37, 73)):
         super().__init__()
         self.config = config
-        self.keep = config.get("data_loader", {}).get("keep")
         self.length = length
 
         # spatial / temporal basis

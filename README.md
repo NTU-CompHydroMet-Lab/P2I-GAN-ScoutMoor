@@ -9,8 +9,6 @@ This repository provides training scripts, data preprocessing workflows, visuali
 
 ---
 
-</div>
-
 ## Update
 
 - **2026.05.18**: Update model weight of P2IGAN, DK, STDK, and Midas dataset.
@@ -47,23 +45,15 @@ This repository provides training scripts, data preprocessing workflows, visuali
    git clone https://github.com/NTU-CompHydroMet-Lab/P2I-GAN-benchmark
    ```
 
-2. Create Conda Environment and Install Dependencies
+2. Install dependencies with uv (Python version and packages are pinned by `uv.lock`)
 
    ```bash
-   # install uv if it is not already available
    pip install -U uv
-   
-   # direct to project folder
    cd P2I-GAN-benchmark
-
-   # create and activate a local virtual environment
-   uv venv .venv
-   source .venv/bin/activate
-
-   # install project dependencies from pyproject.toml / uv.lock
-   uv pip install -e .
    uv sync
    ```
+
+   Run commands through `uv run …`, or activate `.venv` first.
  
 ## Get Started
 ### Prepare pretrained models
@@ -113,123 +103,29 @@ Since we cannot share the original Nimrod (radar) with you, we provide MIDAS (ga
 ```bash
 python scripts/infer.py \
   --config p2igan_bench/config/p2igan_gan_baseline.json \
-  --output your_path/datasets/infer/p2iganwopos_gauge.zarr 
+  --checkpoint weights/p2igan_gan_v9/latest.pt \
+  --output datasets/infer/p2igan_gauge.zarr
 ```
 
 ## Dataset Preparation
 
-The training and testing datasets are stored in **separate directories**, each containing HDF5 (`.h5`) files.  
-Each HDF5 file represents a single event with the following shape:
+Training and validation read directories of HDF5 files; testing reads a Zarr group.
+
+**HDF5 (train / valid).** Each `.h5` file holds a dataset `frames` of shape `(T, H, W)`, `uint8`. The loader keeps the first `sample_length` frames, divides by 255 and centre-crops to `h × w`; the gauge mask file must match the full `H × W`. The shipped data are 20 × 1024 × 1024 radar frames encoded as `v = 48·log10(R / 0.036)` with `R` in mm/h.
 
 ```
-(H, W, T) = (128, 128, 16)
+datasets/nimrod_h5
+├── train   # 201601011320a.h5, 201601011320b.h5, ...
+├── test    # used as data.valid by the shipped configs
+└── val     # 1.h5 ... 20.h5 (test events)
 ```
 
-In our experiments, the data sources include **Nimrod (radar)** and **MIDAS (rain gauge)**.  
-Users should replace these with their own datasets following the same format.
+**Zarr (test).** A Zarr group whose arrays are events of shape `(T, H, W)`, for example `midas_test.zarr/event_01` with shape `(241, 128, 128)`. Whole events are read and inferred with a sliding window (`--stride`, `--overlap` in `scripts/infer.py`).
 
----
-
-## HDF5 Directory Structure
-
-```
-datasets
-├── train
-│   ├── 201601011320.h5
-│   ├── 201601020600.h5
-│
-├── test
-│   ├── 201601010000.h5
-│   ├── 201601010320.h5
-│
-├── test_events
-│   ├── event1.h5
-│   ├── event2.h5
-```
-
-Each `.h5` file must contain a dataset named `frames` with shape `(T, H, W)` or `(H, W, T)` that can be reshaped accordingly.
-
----
-
-## Zarr-Based Dataset (Optional)
-
-This project also supports **Zarr-based datasets**, which are recommended for large-scale radar or gauge data and long time series training.
-
-Compared with HDF5, Zarr provides:
-- Chunked storage
-- Partial I/O
-- Better scalability for sliding-window training
-
-The Zarr format is fully compatible with the provided `Dataset` and `Dataset_ZarrTrain` implementations.
-
----
-
-## Zarr Directory Structure
-
-```
-datasets
-├── train.zarr
-│   ├── events
-│   │   ├── 20160101
-│   │   │   └── frames        # (T, H, W), uint8
-│   │   ├── 20160102
-│   │   │   └── frames
-│   │
-│   ├── index
-│   │   └── windows           # (N, 3) -> [event_id, start_t, length]
-│   │
-│   └── .zattrs
-│
-├── test.zarr
-│   ├── events
-│   │   ├── event1
-│   │   │   └── frames
-│   │   ├── event2
-│   │   │   └── frames
-│   │
-│   ├── index
-│   │   └── windows
-│   │
-│   └── .zattrs
-```
-
-
----
-
-## Zarr Data Conventions
-
-- **frames**
-  - Shape: `(T, H, W)`
-  - Data type: `uint8`
-  - Values are scaled to `[0, 255]` before storage
-
-- **index/windows**
-  - Shape: `(N, 3)`
-  - Format: `[event_id, start_t, length]`
-  - Defines temporal windows for training or evaluation
-
-- Training and testing datasets are stored in **independent Zarr roots**
-  - `train.zarr`
-  - `test.zarr`
-
----
-
-## Zarr Attributes
-
-Stored in `.zattrs` at the root level:
-
-```json
-{
-  "suggested_window": 20,
-  "description": "Radar / gauge rainfall sequences for spatio-temporal interpolation and nowcasting"
-}
-```
-
-The `suggested_window` attribute is used by `Dataset_ZarrTrain` as the default temporal window length.
-
+In our experiments the data sources are **Nimrod (radar)** and **MIDAS (rain gauge)**.
 
 ## Training
-Our training configures are provided in [`p2igan_baseline.json`](./p2igan_bench/configs/p2igan_baseline.json) 
+Training configs are in [`p2igan_bench/config/`](./p2igan_bench/config/).
 
 Run one of the following commands for training:
 ```shell
@@ -242,16 +138,12 @@ Run one of the following commands for training:
   # For infer P2IGAN
  python scripts/infer.py --config p2igan_bench/config/p2igan_gan_baseline.json
 
- python scripts/infer.py --config p2igan_bench/config/p2igan_gan_baseline.json
-
 ```
 
 
 ## Evaluation
-Run one of the following commands for evaluation:
+Run from the repository root:
 ```shell
- # For evaluating flow completion model
- cd experiments
  python -m experiments.main
 ```
 ## License

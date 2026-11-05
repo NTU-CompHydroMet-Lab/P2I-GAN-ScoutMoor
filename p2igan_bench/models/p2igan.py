@@ -9,38 +9,27 @@ import torch.nn.functional as F
 from p2igan_bench.modules.layer import (
     BaseNetwork,
     BasicConv_do,
-    BasicConv_do_eval,
     ResBlock_do,
-    ResBlock_do_eval,
     InputBlock,
     DownsampleDuplicateChannels,
     UPPos,
-    UP,
     C2,
     C3,
 )
 
 
 class P2IGenerator(BaseNetwork):
-    def __init__(self, config, length: int = 16, num_res: int = 4, inference: bool = False, init_weights: bool = True):
+    def __init__(self, config, length: int = 16, num_res: int = 4, init_weights: bool = True):
         super().__init__()
 
-        data_cfg = config.get("data_loader") or config["data"]["train"]
-        self.keep = data_cfg.get("mask", {}).get("keep", 0)
+        data_cfg = config["data"]["train"]
         self.H = data_cfg["h"]
         self.W = data_cfg["w"]
         length = data_cfg.get("sample_length", length)
         self.length = length
 
-        self.inference = inference
-        if not inference:
-            ResBlock = ResBlock_do
-            # ResBlock = ResBlock_do_fft_bench
-            ConvBlock = BasicConv_do
-        else:
-            ResBlock = ResBlock_do_eval
-            # ResBlock = ResBlock_do_fft_bench_eval
-            ConvBlock = BasicConv_do_eval
+        ResBlock = ResBlock_do
+        ConvBlock = BasicConv_do
 
         self.input = InputBlock(depth=2, k=4, rho=2.0, tau=0.05, chunk=16384)
 

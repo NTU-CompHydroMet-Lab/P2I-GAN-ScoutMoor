@@ -1,5 +1,4 @@
 from __future__ import annotations
-from ast import In
 
 import torch
 import torch.nn as nn
@@ -140,11 +139,10 @@ class DKGenerator(BaseNetwork):
     DK (DeepKriging) with spatial basis only (per-frame).
     """
 
-    def __init__(self, config, length=16, inference=False, init_weights=True,
+    def __init__(self, config, length=16, init_weights=True,
                  num_basis_space=(10, 19, 37, 73), visible_k=79):
         super().__init__()
         self.config = config
-        self.keep = config.get("data_loader", {}).get("keep")
         self.length = length
         self.visible_k = visible_k
 

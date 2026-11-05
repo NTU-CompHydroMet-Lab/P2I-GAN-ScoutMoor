@@ -1,11 +1,9 @@
 from copy import deepcopy
-from pathlib import Path
-import json
 
 import torch
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader
 
-from .sti_dataset import Dataset, Dataset_ZarrTrain  # 舊 Dataset 實作
+from .sti_dataset import Dataset
 
 
 class P2IDataModule:
@@ -30,19 +28,12 @@ class P2IDataModule:
         self.valid_args = None
         self.valid_shuffle = False
 
-        if self._is_train_zarr(self.train_args.get("data_root")):
-            base_dataset = Dataset_ZarrTrain(self.train_args)
-            self.train_dataset, self.valid_dataset = self._split_train_valid(
-                base_dataset, seed=cfg.get("seed", 42)
-            )
-            self.valid_shuffle = False
-        else:
-            self.train_dataset = Dataset(self.train_args)
-            if valid_cfg:
-                # validation 預設沿用訓練的尺寸/時間長度，避免與模型長度不一致
-                self.valid_args = self._build_dataset_args(valid_cfg, defaults=shared_params)
-                self.valid_shuffle = bool(valid_cfg.get("shuffle", False))
-                self.valid_dataset = Dataset(self.valid_args)
+        self.train_dataset = Dataset(self.train_args)
+        if valid_cfg:
+            # validation inherits train w/h/sample_length/mask so its clips match the model length
+            self.valid_args = self._build_dataset_args(valid_cfg, defaults=shared_params)
+            self.valid_shuffle = bool(valid_cfg.get("shuffle", False))
+            self.valid_dataset = Dataset(self.valid_args)
 
         test_cfg = data_cfg.get("test")
         self.test_args = None
@@ -86,29 +77,6 @@ class P2IDataModule:
             collate_fn=collate_fn,
         )
 
-    def _is_train_zarr(self, data_root):
-        if data_root is None:
-            return False
-        return str(data_root).endswith("train.zarr")
-
-    def _split_train_valid(self, dataset, seed: int = 42, train_ratio: float = 0.8):
-        total = len(dataset)
-        if total <= 1:
-            return dataset, None
-
-        val_size = int(total * (1 - train_ratio))
-        if val_size <= 0:
-            val_size = 1
-        if val_size >= total:
-            val_size = total - 1
-
-        train_size = total - val_size
-        generator = torch.Generator().manual_seed(seed)
-        indices = torch.randperm(total, generator=generator).tolist()
-        train_idx = indices[:train_size]
-        val_idx = indices[train_size:]
-        return Subset(dataset, train_idx), Subset(dataset, val_idx)
-
     def _build_dataset_args(self, split_cfg, defaults=None):
         defaults = defaults or {}
         args = {}
@@ -129,12 +97,9 @@ class P2IDataModule:
         if mask_cfg:
             args["mask"] = mask_cfg
 
-        if "data_root" in split_cfg:
-            args["data_root"] = split_cfg["data_root"]
-        elif "data_root1" in split_cfg:
-            args["data_root"] = split_cfg["data_root1"]
-        else:
+        if "data_root" not in split_cfg:
             raise KeyError("Dataset config requires 'data_root'.")
+        args["data_root"] = split_cfg["data_root"]
 
         return args
 
@@ -168,60 +133,3 @@ class P2IDataModule:
         masked_videos = torch.stack([_pad(v) for v in masked_videos], dim=0)
         masks = torch.stack([_pad(v) for v in masks], dim=0)
         return videos, masked_videos, masks
-
-
-def _describe_tensor(name, tensor):
-    tensor = tensor.detach().cpu()
-    flat = tensor.reshape(-1)
-    stats = {
-        "shape": tuple(tensor.shape),
-        "dtype": str(tensor.dtype),
-        "min": float(flat.min()),
-        "max": float(flat.max()),
-        "mean": float(flat.mean()),
-    }
-    sample_values = flat[:5].tolist()
-    print(
-        f"[{name}] shape={stats['shape']} dtype={stats['dtype']} "
-        f"min={stats['min']:.4f} max={stats['max']:.4f} mean={stats['mean']:.4f}"
-    )
-    print(f"    sample={sample_values}")
-
-
-def _inspect_loader(loader, label):
-    if loader is None:
-        print(f"[{label}] loader not configured")
-        return
-    try:
-        batch = next(iter(loader))
-    except StopIteration:
-        print(f"[{label}] loader is empty")
-        return
-
-    video, masked, mask = batch
-    print(f"[{label}] batch size={video.shape[0]}")
-    _describe_tensor(f"{label}/video", video)
-    _describe_tensor(f"{label}/masked", masked)
-    _describe_tensor(f"{label}/mask", mask)
-
-
-if __name__ == "__main__":
-    CONFIG_PATH = Path(
-        "p2igan_bench/config/p2igan_baseline.json"
-    )
-    if not CONFIG_PATH.is_file():
-        raise FileNotFoundError(f"Config file not found: {CONFIG_PATH}")
-
-    with CONFIG_PATH.open("r", encoding="utf-8") as f:
-        cfg = json.load(f)
-
-    data_module = P2IDataModule(cfg)
-
-    print("==== Inspecting train loader ====")
-    _inspect_loader(data_module.train_dataloader(), "train")
-
-    print("==== Inspecting validation loader ====")
-    _inspect_loader(data_module.val_dataloader(), "valid")
-
-    print("==== Inspecting test loader ====")
-    _inspect_loader(data_module.test_dataloader(), "test")
