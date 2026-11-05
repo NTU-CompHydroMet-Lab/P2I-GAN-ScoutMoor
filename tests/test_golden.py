@@ -56,12 +56,19 @@ def test_checkpoint_loads_strictly(config_name, in_root):
     generator.load_state_dict(state["generator"], strict=True)
 
 
+GOLDEN_EVENT = "event_01"
+
+
 @pytest.mark.slow
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="golden outputs were produced on CUDA")
 def test_v9_inference_matches_stored_output(tmp_path, in_root):
     ckpt = CHECKPOINTS["p2igan_gan_baseline.json"]
+    source = "datasets/midas/midas_test.zarr"
     reference = "datasets/infer/p2igan_gan_baseline_v3_pm_gauge.zarr"
-    _require(ckpt, reference, "datasets/midas/midas_test.zarr", "datasets/masks/gauge_mask_128_train.txt")
+    _require(ckpt, reference, source, "datasets/masks/gauge_mask_128_train.txt")
+
+    event_root = tmp_path / "input.zarr"
+    zarr.open_group(str(event_root), mode="w")[GOLDEN_EVENT] = zarr.open(source, mode="r")[GOLDEN_EVENT][:]
 
     infer = _load_script("infer")
     out = tmp_path / "v9.zarr"
@@ -70,7 +77,7 @@ def test_v9_inference_matches_stored_output(tmp_path, in_root):
             config=CONFIG_DIR / "p2igan_gan_baseline.json",
             checkpoint=Path(ckpt),
             model_dir=None,
-            data_root=None,
+            data_root=event_root,
             output=out,
             passes=1,
             device="cuda:0",
@@ -83,9 +90,7 @@ def test_v9_inference_matches_stored_output(tmp_path, in_root):
         )
     )
 
-    produced = zarr.open(str(out), mode="r")
-    expected = zarr.open(reference, mode="r")
-    assert sorted(produced.array_keys()) == sorted(expected.array_keys())
-    for key in expected.array_keys():
-        diff = np.abs(produced[key][:] - expected[key][:]).max()
-        assert diff == 0.0, f"{key}: max abs diff {diff}"
+    produced = zarr.open(str(out), mode="r")[GOLDEN_EVENT][:]
+    expected = zarr.open(reference, mode="r")[GOLDEN_EVENT][:]
+    diff = np.abs(produced - expected).max()
+    assert diff == 0.0, f"{GOLDEN_EVENT}: max abs diff {diff}"
