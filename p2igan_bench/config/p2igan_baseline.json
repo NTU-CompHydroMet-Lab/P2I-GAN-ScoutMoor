@@ -19,7 +19,7 @@
   "data": {
     "train": {
       "name": "youtube-vos",
-      "data_root": "/home/NAS/homes/brick-10015/Nimrod_2d_data/NIMROD_Train_datasets_sti/train",
+      "data_root": "datasets/nimrod_h5/train",
       "w": 128,
       "h": 128,
       "sample_length": 16,
@@ -28,15 +28,15 @@
         "keep": 4,
         "block_sizes": [10],
         "interval": [2, 3, 4, 5, 6],
-        "file": "/home/NAS/homes/brick-10015/INGAN/core/rain_gauge_mask_1024_train.txt"
+        "file": "datasets/masks/gauge_mask_1024_train.txt"
       }
     },
     "valid": {
-      "data_root": "/home/NAS/homes/brick-10015/Nimrod_2d_data/NIMROD_Train_datasets_sti/test",
+      "data_root": "datasets/nimrod_h5/test",
       "shuffle": false
     },
     "test": {
-      "data_root": "/home/NAS/homes/brick-10015/Nimrod_2d_data/NIMROD_Train_datasets_sti/val",
+      "data_root": "datasets/nimrod_h5/val",
       "w": 128,
       "h": 128,
       "mask": {
@@ -44,7 +44,7 @@
         "keep": 4,
         "block_sizes": [10],
         "interval": [2, 3, 4, 5, 6],
-        "file": "/home/NAS/homes/brick-10015/INGAN/core/rain_gauge_mask_1024_train.txt"
+        "file": "datasets/masks/gauge_mask_1024_train.txt"
       },
       "shuffle": false
     }

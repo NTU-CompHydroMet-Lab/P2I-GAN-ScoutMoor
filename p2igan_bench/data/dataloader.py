@@ -207,7 +207,7 @@ def _inspect_loader(loader, label):
 
 if __name__ == "__main__":
     CONFIG_PATH = Path(
-        "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/p2igan_bench/config/p2igan_baseline.json"
+        "p2igan_bench/config/p2igan_baseline.json"
     )
     if not CONFIG_PATH.is_file():
         raise FileNotFoundError(f"Config file not found: {CONFIG_PATH}")

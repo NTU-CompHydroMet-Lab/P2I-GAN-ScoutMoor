@@ -83,6 +83,29 @@ folder
       |- midas_test.zarr
 ```
 
+### Local data layout
+
+All config paths are relative to the repository root, so run every command from there. `datasets/`, `weights/` and `legacy/` are git-ignored and hold local copies of the original developer's files:
+
+| Path | Contents |
+| --- | --- |
+| `datasets/nimrod_h5/{train,test,val}` | HDF5 events used by the shipped configs |
+| `datasets/masks/` | Gauge masks (`gauge_mask_{128,1024}_{train,test}.txt`) |
+| `datasets/midas/midas_test.zarr` | MIDAS gauge test events |
+| `datasets/nimrod/` | `nimrod_test.zarr`, `nimrod_train.zarr` |
+| `datasets/infer/`, `datasets/predict/` | Stored model and baseline outputs used by `experiments/` |
+| `weights/` | Released checkpoints, one directory per run |
+| `legacy/mlruns/` | MLflow metadata of the original runs (no artifacts) |
+
+`scripts/tools/` holds the scripts that built these datasets. Their raw inputs are still read from `/home/NAS/homes/brick-10015/Nimrod_2d_data`, which is not copied.
+
+### Tests
+
+```bash
+uv run pytest -m "not slow"   # strict checkpoint loading
+uv run pytest                 # adds the v9 golden inference test (needs a free CUDA GPU)
+```
+
 ### Inference with Fake Data
 
 Since we cannot share the original Nimrod (radar) with you, we provide MIDAS (gauge) datasets we use in our experiment instead. After downloaded the datasets, you can just use code here to see the result.

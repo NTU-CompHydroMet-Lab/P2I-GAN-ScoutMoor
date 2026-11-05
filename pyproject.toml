@@ -29,6 +29,15 @@ url = "https://download.pytorch.org/whl/cu121"
 requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: runs full inference on GPU"]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["p2igan_bench*", "experiments*"]

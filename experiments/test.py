@@ -46,27 +46,27 @@ def describe(name: str, arr: np.ndarray, max_samples: int = 1_000_000) -> np.nda
 def main() -> None:
     radar_mode = ModeConfig(
         observation_path=(
-            "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/nimrod/nimrod_test.zarr"
+            "datasets/nimrod/nimrod_test.zarr"
         ),
         truth_path=(
-            "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/nimrod/nimrod_test.zarr"
+            "datasets/nimrod/nimrod_test.zarr"
         ),
         methods={
             "P2IGAN": (
-                "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/infer/p2igan_test.zarr"
+                "datasets/infer/p2igan_test.zarr"
             ),
             "DK": (
-                "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/infer/dk_test.zarr"
+                "datasets/infer/dk_test.zarr"
             ),
             "STDK": (
-                "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/infer/stdk_test.zarr"
+                "datasets/infer/stdk_test.zarr"
             ),
         },
         mask_train_path=(
-            "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/masks/gauge_mask_128_train.txt"
+            "datasets/masks/gauge_mask_128_train.txt"
         ),
         mask_test_path=(
-            "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/masks/gauge_mask_128_test.txt"
+            "datasets/masks/gauge_mask_128_test.txt"
         ),
     )
 

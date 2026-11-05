@@ -117,91 +117,91 @@ class ExperimentConfig:
 def build_config() -> ExperimentConfig:
     radar_mode = ModeConfig(
         observation_path=(
-            "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/nimrod/nimrod_test.zarr"
+            "datasets/nimrod/nimrod_test.zarr"
         ),
         nimrod_path=(
-            "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/nimrod/nimrod_test.zarr"
+            "datasets/nimrod/nimrod_test.zarr"
         ),
         # methods={
         #     "DK (Full)": (
-        #         "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/infer/dk_v3_pm_nimrod.zarr"
+        #         "datasets/infer/dk_v3_pm_nimrod.zarr"
         #     ),
         #     "STDK (Full)": (
-        #         "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/infer/stdk_v3_pm_nimrod.zarr"
+        #         "datasets/infer/stdk_v3_pm_nimrod.zarr"
         #     ),
         #     "DK (w/o pm)": (
-        #         "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/predict/v2/dk_nimrod.zarr"
+        #         "datasets/predict/v2/dk_nimrod.zarr"
         #     ),
         #     "STDK (w/o pm)": (
-        #         "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/predict/v2/stdk_nimrod.zarr"
+        #         "datasets/predict/v2/stdk_nimrod.zarr"
         #     ),
         #     "DK (mse loss)": (
-        #         "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/predict/dk_mse_nimrod.zarr"
+        #         "datasets/predict/dk_mse_nimrod.zarr"
         #     ),
         #     "STDK (mse loss)": (
-        #         "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/predict/stdk_nimrod.zarr"
+        #         "datasets/predict/stdk_nimrod.zarr"
         #     ),
         # },
         methods={
             "P2I-GAN+": (
-                "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/infer/p2igan_gan_baseline_v3_pm_nimrod.zarr"
+                "datasets/infer/p2igan_gan_baseline_v3_pm_nimrod.zarr"
             ),
             "P2I-GAN": (
-                "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/infer/p2igan_baseline_v3_pm_nimrod.zarr"
+                "datasets/infer/p2igan_baseline_v3_pm_nimrod.zarr"
             ),
             "DK": (
-                "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/infer/dk_v3_pm_nimrod.zarr"
+                "datasets/infer/dk_v3_pm_nimrod.zarr"
             ),
             "STDK": (
-                "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/infer/stdk_v3_pm_nimrod.zarr"
+                "datasets/infer/stdk_v3_pm_nimrod.zarr"
             ),
             "OK": (
-                "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/infer/ok_nimrod.zarr"
+                "datasets/infer/ok_nimrod.zarr"
             ),
             "RBF": (
-                "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/infer/rbf_nimrod.zarr"
+                "datasets/infer/rbf_nimrod.zarr"
             ),
         },
         mask_train_path=(
-            "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/masks/gauge_mask_128_train.txt"
+            "datasets/masks/gauge_mask_128_train.txt"
         ),
         mask_test_path=(
-            "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/masks/gauge_mask_128_test.txt"
+            "datasets/masks/gauge_mask_128_test.txt"
         ),
     )
 
     gauge_mode = ModeConfig(
         observation_path=(
-            "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/midas/midas_test.zarr"
+            "datasets/midas/midas_test.zarr"
         ),
         nimrod_path=(
-            "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/nimrod/nimrod_test.zarr"
+            "datasets/nimrod/nimrod_test.zarr"
         ),
         methods={
             "P2I-GAN+": (
-                "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/infer/p2igan_gan_baseline_v3_pm_gauge.zarr"
+                "datasets/infer/p2igan_gan_baseline_v3_pm_gauge.zarr"
             ),
             "P2I-GAN": (
-                "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/infer/p2igan_baseline_v3_pm_gauge.zarr"
+                "datasets/infer/p2igan_baseline_v3_pm_gauge.zarr"
             ),
             "DK": (
-                "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/infer/dk_v3_pm_gauge.zarr"
+                "datasets/infer/dk_v3_pm_gauge.zarr"
             ),
             "STDK": (
-                "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/infer/stdk_v3_pm_gauge.zarr"
+                "datasets/infer/stdk_v3_pm_gauge.zarr"
             ),
             "KRE": (
-                "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/predict/kre_gauge_v2.zarr"
+                "datasets/predict/kre_gauge_v2.zarr"
             ),
             "KED": (
-                "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/predict/ked_gauge_v2.zarr"
+                "datasets/predict/ked_gauge_v2.zarr"
             ),
         },
         mask_train_path=(
-            "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/masks/gauge_mask_128_train.txt"
+            "datasets/masks/gauge_mask_128_train.txt"
         ),
         mask_test_path=(
-            "/home/NAS/homes/brick-10015/P2I-GAN-benchmark/datasets/masks/gauge_mask_128_test.txt"
+            "datasets/masks/gauge_mask_128_test.txt"
         ),
     )
 
