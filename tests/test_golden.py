@@ -1,6 +1,11 @@
 """Golden tests pinning the legacy pipeline to the released v9 / v2 results.
 
 Paths are repo-relative; run pytest from the repository root.
+
+``datasets/golden/v9_midas_gauge.zarr`` was produced by tag ``baseline-v0`` on the
+GPU, driver and torch version recorded in its attrs. Inference is only bit-exact
+on that same setup; on CPU it is not comparable at all, because ``InputBlock``
+runs its IDW in float16 on CUDA and float32 on CPU.
 """
 
 from __future__ import annotations
@@ -56,19 +61,15 @@ def test_checkpoint_loads_strictly(config_name, in_root):
     generator.load_state_dict(state["generator"], strict=True)
 
 
-GOLDEN_EVENT = "event_01"
+GOLDEN = "datasets/golden/v9_midas_gauge.zarr"
+AUTHOR = "datasets/infer/p2igan_gan_baseline_v3_pm_gauge.zarr"
 
 
 @pytest.mark.slow
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="golden outputs were produced on CUDA")
-def test_v9_inference_matches_stored_output(tmp_path, in_root):
+def test_v9_inference_matches_golden(tmp_path, in_root):
     ckpt = CHECKPOINTS["p2igan_gan_baseline.json"]
-    source = "datasets/midas/midas_test.zarr"
-    reference = "datasets/infer/p2igan_gan_baseline_v3_pm_gauge.zarr"
-    _require(ckpt, reference, source, "datasets/masks/gauge_mask_128_train.txt")
-
-    event_root = tmp_path / "input.zarr"
-    zarr.open_group(str(event_root), mode="w")[GOLDEN_EVENT] = zarr.open(source, mode="r")[GOLDEN_EVENT][:]
+    _require(ckpt, GOLDEN, "datasets/midas/midas_test.zarr", "datasets/masks/gauge_mask_128_train.txt")
 
     infer = _load_script("infer")
     out = tmp_path / "v9.zarr"
@@ -77,7 +78,7 @@ def test_v9_inference_matches_stored_output(tmp_path, in_root):
             config=CONFIG_DIR / "p2igan_gan_baseline.json",
             checkpoint=Path(ckpt),
             model_dir=None,
-            data_root=event_root,
+            data_root=None,
             output=out,
             passes=1,
             device="cuda:0",
@@ -90,7 +91,19 @@ def test_v9_inference_matches_stored_output(tmp_path, in_root):
         )
     )
 
-    produced = zarr.open(str(out), mode="r")[GOLDEN_EVENT][:]
-    expected = zarr.open(reference, mode="r")[GOLDEN_EVENT][:]
-    diff = np.abs(produced - expected).max()
-    assert diff == 0.0, f"{GOLDEN_EVENT}: max abs diff {diff}"
+    produced = zarr.open(str(out), mode="r")
+    expected = zarr.open(GOLDEN, mode="r")
+    assert sorted(produced.array_keys()) == sorted(expected.array_keys())
+    for key in expected.array_keys():
+        diff = np.abs(produced[key][:] - expected[key][:]).max()
+        assert diff == 0.0, f"{key}: max abs diff {diff}"
+
+
+def test_golden_close_to_author_output(in_root):
+    _require(GOLDEN, AUTHOR)
+    golden = zarr.open(GOLDEN, mode="r")
+    author = zarr.open(AUTHOR, mode="r")
+    assert sorted(golden.array_keys()) == sorted(author.array_keys())
+    for key in author.array_keys():
+        diff = np.abs(golden[key][:] - author[key][:])
+        assert diff.max() < 2.5 and diff.mean() < 0.02, f"{key}: max {diff.max()}, mean {diff.mean()}"

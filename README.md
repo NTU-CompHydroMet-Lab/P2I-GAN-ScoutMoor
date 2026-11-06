@@ -92,9 +92,11 @@ All config paths are relative to the repository root, so run every command from 
 ### Tests
 
 ```bash
-uv run pytest -m "not slow"   # strict checkpoint loading
-uv run pytest                 # adds the v9 golden inference test (needs a free CUDA GPU)
+uv run pytest -m "not slow"   # strict checkpoint loading, golden vs. author output
+uv run pytest                 # adds v9 inference on all MIDAS test events (CUDA, ~40 s)
 ```
+
+The golden reference `datasets/golden/v9_midas_gauge.zarr` was produced by tag `baseline-v0`; its attrs record the GPU, driver and torch version. Inference is bit-exact only on that setup. On another GPU, expect differences of about 2 (on the 0–255 scale). On CPU, results are not comparable, because the IDW in `InputBlock` runs in float16 on CUDA and in float32 on CPU.
 
 ### Inference with Fake Data
 
