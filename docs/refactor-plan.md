@@ -36,7 +36,7 @@ Input 是多個固定雨量站的時間序列，實際資料尚未取得。缺�
 | --- | --- | --- | --- | --- |
 | A 基線凍結 | local tag；複製 brick 依賴到 `datasets/`、`weights/`；路徑改為 repo 相對；`scripts/tools` 收進 repo；核對 MLflow 紀錄的訓練參數與現行 config；黃金測試 | 無 | S | Done |
 | B 清理 | 刪死碼與 mp4 路線、未用依賴、`.codex`；`.gitignore`；README 先刪錯誤內容 | A | S | Done |
-| C 升級 | Python 3.12 與套件、lock、pytest、ruff；黃金測試改容差比對 | B | M | Not started |
+| C 升級 | Python 3.12 與套件、lock、pytest、ruff；黃金測試改容差比對 | B | M | Done |
 | D Config | pydantic schema、`extra="forbid"`、全部 config 重寫；寫入新資料路徑 | C | M | Not started |
 | E Trainer | 修 `train.py:217`、`val_every_epochs`、resume、LR 排程；實驗紀錄改用 W&B（抽出 logger 介面） | D | S | Not started |
 | F 編碼與指標 | 單一 `RainCodec` 存進 checkpoint；指標重寫並接上驗證；刪三份舊 transform | D | M | Not started |
@@ -98,3 +98,7 @@ A 必須最先：黃金測試要在舊環境建立，後續才能證明行為未
 | 2026-11-06 | B | commit 9f97e99，淨刪約 950 行。新舊程式在 CPU 上對四個模型的資料讀取、生成器輸出、loss 共 48 個陣列逐值相同 |
 | 2026-11-06 | A | RTX 3080 上，`baseline-v0` 與 `refactor` 對 MIDAS 10 個事件的 GPU 推論逐位元相同；與作者存檔差最大 1.97、平均 ≤0.009（0–255 尺度），原因未確認，推測是 GPU 型號或驅動不同。新黃金參考 `datasets/golden/v9_midas_gauge.zarr`，commit 82a2f1b |
 | 2026-11-06 | A | CPU 推論不可信：`InputBlock` 的 IDW 在 CUDA 用 float16、CPU 用 float32，4 個最近雨量站的選擇在約 8.6% 的網格點不同，單一視窗輸出差可達 324。權重是在 GPU 路徑上訓練的，所以只有 GPU 輸出代表模型行為。統一精度屬於 G 包，會改變舊權重的輸出 |
+| 2026-11-06 | C | commit 6489ba7。Python 3.12、torch 2.14.1+cu126、numpy 2.5、zarr 3.4、mlflow 3.18、scipy 1.18、pandas 3.1；ruff 加入並修正全 repo。輸出 store 改為 zarr v3；mlflow 3 的 file store 需設 `MLFLOW_ALLOW_FILE_STORE=true` |
+| 2026-11-06 | C | 升級後在 3080 上對黃金參考：DK、STDK 逐位元相同；v9 最大差 2.1、平均 0.006；wopos v9 最大差 1.65、平均 0.008。黃金測試容差 P2I 設 (2.5, 0.02)、DK/STDK 設為 0。全套 15 個測試通過 |
+| 2026-11-06 | C | 以新環境重跑作者的 exp1：gauge、radar 的所有指標與作者 `metrics.json` 相對差 ≤1.1e-5。nimrod 的 `metrics.json`（4/10）早於作者 4/11 修改 PSS 並移除 DTSSIM/NSE 的 commit，無法比對；其中 MAE、RMSE、SSIM 仍相同 |
+| 2026-11-06 | C | 事故：import 檢查誤載入 `scripts/tools/preprocess.py`，其模組層級以 `mode="w"` 開啟 `datasets/nimrod/nimrod_train.zarr`，刪掉本地副本 12686 個事件中的 3699 個。已自 brick 原檔補回：1,662,133 個檔案名稱與大小全部一致，無任何檔案的修改時間晚於事故前。brick 原檔與 isaac 資料未受影響。`scripts/tools` 之後只做 `py_compile`，不 import |
