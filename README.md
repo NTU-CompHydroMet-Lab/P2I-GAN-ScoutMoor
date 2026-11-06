@@ -93,10 +93,10 @@ All config paths are relative to the repository root, so run every command from 
 
 ```bash
 uv run pytest -m "not slow"   # strict checkpoint loading, golden vs. author output
-uv run pytest                 # adds v9 inference on all MIDAS test events (CUDA, ~40 s)
+uv run pytest                 # adds inference of v9, wopos v9, DK and STDK on the MIDAS gauge test set (CUDA, ~2.5 min)
 ```
 
-The golden reference `datasets/golden/v9_midas_gauge.zarr` was produced by tag `baseline-v0`; its attrs record the GPU, driver and torch version. Inference is bit-exact only on that setup. On another GPU, expect differences of about 2 (on the 0–255 scale). On CPU, results are not comparable, because the IDW in `InputBlock` runs in float16 on CUDA and in float32 on CPU.
+The golden references in `datasets/golden/` were produced by tag `baseline-v0` on the GPU, driver and torch version recorded in their attrs. Every model is fed the MIDAS gauge test set. DK and STDK match the author's stored outputs bit for bit. v9 differs by at most 2 (on the 0–255 scale) for reasons not yet identified. Inference is bit-exact only on the recorded setup. On CPU, P2I results are not comparable, because the IDW in `InputBlock` runs in float16 on CUDA and in float32 on CPU.
 
 ### Inference with Fake Data
 
