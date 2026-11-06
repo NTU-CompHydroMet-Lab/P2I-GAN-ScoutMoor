@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Tuple
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -48,7 +46,7 @@ class BasicConv_do(nn.Module):
             bias = False
 
         padding = kernel_size // 2
-        layers: List[nn.Module] = []
+        layers: list[nn.Module] = []
         if transpose:
             padding = kernel_size // 2 - 1
             layers.append(nn.ConvTranspose2d(in_channel, out_channel, kernel_size, padding=padding, stride=stride, bias=bias))
@@ -98,7 +96,7 @@ class DownsampleDuplicateChannels(nn.Module):
         return x
 
 
-_GRID_CACHE: Dict[Tuple[int, int, int, str, torch.dtype], torch.Tensor] = {}
+_GRID_CACHE: dict[tuple[int, int, int, str, torch.dtype], torch.Tensor] = {}
 
 
 def _get_grid_points(D, H, W, device, dtype):

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Iterable
 from dataclasses import asdict, is_dataclass
-from typing import Dict, Iterable, Optional, Tuple, Union
 
 import numpy as np
 
@@ -35,7 +35,7 @@ def load_mask(path: str) -> np.ndarray:
     return mask.astype(bool)
 
 
-def _crop_last2(arr: np.ndarray, size: Optional[int]) -> np.ndarray:
+def _crop_last2(arr: np.ndarray, size: int | None) -> np.ndarray:
     if size is None:
         return np.asarray(arr)
     arr = np.asarray(arr)
@@ -49,7 +49,7 @@ def _crop_last2(arr: np.ndarray, size: Optional[int]) -> np.ndarray:
     return arr[..., top:top + size, left:left + size]
 
 
-def _open_zarr_xarray(path: str, key: Optional[str] = None, crop_size: Optional[int] = None) -> np.ndarray:
+def _open_zarr_xarray(path: str, key: str | None = None, crop_size: int | None = None) -> np.ndarray:
     import xarray as xr
 
     ds = xr.open_zarr(path)
@@ -62,7 +62,7 @@ def _open_zarr_xarray(path: str, key: Optional[str] = None, crop_size: Optional[
     return _crop_last2(arr, crop_size)
 
 
-def _open_zarr_native(path: str, crop_size: Optional[int] = None) -> np.ndarray:
+def _open_zarr_native(path: str, crop_size: int | None = None) -> np.ndarray:
     import zarr
 
     z = zarr.open(path, mode="r")
@@ -73,7 +73,7 @@ def _open_zarr_native(path: str, crop_size: Optional[int] = None) -> np.ndarray:
     return _crop_last2(np.asarray(z), crop_size)
 
 
-def _load_zarr_events_xarray(path: str, crop_size: Optional[int] = None) -> Optional[Dict[str, np.ndarray]]:
+def _load_zarr_events_xarray(path: str, crop_size: int | None = None) -> dict[str, np.ndarray] | None:
     try:
         import xarray as xr
     except Exception:
@@ -85,7 +85,7 @@ def _load_zarr_events_xarray(path: str, crop_size: Optional[int] = None) -> Opti
     return None
 
 
-def _load_zarr_events_native(path: str, crop_size: Optional[int] = None) -> Optional[Dict[str, np.ndarray]]:
+def _load_zarr_events_native(path: str, crop_size: int | None = None) -> dict[str, np.ndarray] | None:
     try:
         import zarr
     except Exception:
@@ -120,9 +120,9 @@ def _load_zarr_events_native(path: str, crop_size: Optional[int] = None) -> Opti
 
 
 def load_zarr_array(path: str,
-                    key: Optional[str] = None,
+                    key: str | None = None,
                     return_events: bool = False,
-                    crop_size: Optional[int] = None) -> Union[np.ndarray, Dict[str, np.ndarray]]:
+                    crop_size: int | None = None) -> np.ndarray | dict[str, np.ndarray]:
     if not isinstance(path, str) or not path.strip():
         raise ValueError("zarr path is empty")
     path = path.strip()
@@ -139,7 +139,7 @@ def load_zarr_array(path: str,
     return np.asarray(arr)
 
 
-def align_length(a: np.ndarray, b: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def align_length(a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     a = ensure_thw(a)
     b = ensure_thw(b)
     n = min(a.shape[0], b.shape[0])
@@ -167,7 +167,7 @@ def mask_for_input(arr: np.ndarray, mask: np.ndarray) -> np.ndarray:
     return out
 
 
-def save_json(path: str, payload: Dict) -> None:
+def save_json(path: str, payload: dict) -> None:
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2, sort_keys=True)
 

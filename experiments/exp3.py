@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import os
-from typing import Dict, List, Tuple, Union
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from scipy import stats
 from scipy.ndimage import gaussian_filter1d
 
@@ -25,7 +24,7 @@ def nse(pred: np.ndarray, gt: np.ndarray) -> float:
     return float(1.0 - num / (den + 1e-10))
 
 
-def _select_values(pred: np.ndarray, gt: np.ndarray, mask: np.ndarray, mode: str) -> Tuple[np.ndarray, np.ndarray]:
+def _select_values(pred: np.ndarray, gt: np.ndarray, mask: np.ndarray, mode: str) -> tuple[np.ndarray, np.ndarray]:
     if mode == "radar":
         pred_sel = select_by_mask(pred, mask, invert=True)
         gt_sel = select_by_mask(gt, mask, invert=True)
@@ -82,7 +81,7 @@ def _prepare_xy(pred, true, min_value: float, residual: bool = False):
     return x[keep], y[keep]
 
 
-def _deterministic_subsample(x: np.ndarray, y: np.ndarray, max_points: int) -> Tuple[np.ndarray, np.ndarray]:
+def _deterministic_subsample(x: np.ndarray, y: np.ndarray, max_points: int) -> tuple[np.ndarray, np.ndarray]:
     if x.size <= max_points:
         return x, y
     order = np.argsort(x, kind='mergesort')
@@ -251,7 +250,7 @@ def _logfreq_plot(pred_list, true, labels,
         plt.savefig(save_path, bbox_inches="tight")
     plt.close(fig)
 
-def _nse_boxplot(nse_by_method: Dict[str, List[float]],
+def _nse_boxplot(nse_by_method: dict[str, list[float]],
                  out_path: str) -> None:
     methods = list(nse_by_method.keys())
     data = [nse_by_method[m] for m in methods]
@@ -286,21 +285,21 @@ def _nse_boxplot(nse_by_method: Dict[str, List[float]],
     plt.close(fig)
 
 
-def run_exp3(preds: Dict[str, Union[np.ndarray, Dict[str, np.ndarray]]],
-             truth: Union[np.ndarray, Dict[str, np.ndarray]],
+def run_exp3(preds: dict[str, np.ndarray | dict[str, np.ndarray]],
+             truth: np.ndarray | dict[str, np.ndarray],
              mask: np.ndarray,
              mode: str,
              crop_size: int,
-             out_dir: str) -> Dict[str, float]:
+             out_dir: str) -> dict[str, float]:
     ensure_dir(out_dir)
-    metrics: Dict[str, float] = {}
+    metrics: dict[str, float] = {}
     already_transformed = False
 
-    nse_by_method: Dict[str, List[float]] = {}
+    nse_by_method: dict[str, list[float]] = {}
     if isinstance(truth, dict):
         event_keys = list(truth.keys())
         truth_list = []
-        preds_concat: Dict[str, List[np.ndarray]] = {}
+        preds_concat: dict[str, list[np.ndarray]] = {}
         for name in preds.keys():
             nse_by_method[name] = []
             preds_concat[name] = []

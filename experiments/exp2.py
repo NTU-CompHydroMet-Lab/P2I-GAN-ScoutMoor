@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import re
-from typing import Dict, Iterable, List, Tuple, Union
+from collections.abc import Iterable
 
 import numpy as np
 from PIL import Image
@@ -28,7 +28,7 @@ def _normalize_method_name(name: str) -> str:
     return re.sub(r"[^a-z0-9+]+", "", name.lower())
 
 
-def _lookup_method_path(methods: Dict[str, str], name: str) -> str | None:
+def _lookup_method_path(methods: dict[str, str], name: str) -> str | None:
     if name in methods:
         return methods[name]
     normalized = _normalize_method_name(name)
@@ -62,7 +62,7 @@ def _save_gif(frames: np.ndarray, out_path: str, vmin: float, vmax: float, fps: 
     duration = int(1000 / max(fps, 1))
     imgs[0].save(out_path, save_all=True, append_images=imgs[1:], duration=duration, loop=0)
 
-def _save_combo_gif(frames_map: Dict[str, np.ndarray],
+def _save_combo_gif(frames_map: dict[str, np.ndarray],
                     out_path: str,
                     cmap,
                     norm,
@@ -155,7 +155,7 @@ def _save_combo_gif(frames_map: Dict[str, np.ndarray],
     imgs[0].save(out_path, save_all=True, append_images=imgs[1:], duration=duration, loop=0)
 
 
-def _list_event_keys(path: str) -> List[str]:
+def _list_event_keys(path: str) -> list[str]:
     try:
         import zarr
     except Exception:
@@ -170,7 +170,7 @@ def _list_event_keys(path: str) -> List[str]:
     if not keys:
         return []
 
-    def key_num(k: str) -> Tuple[int, str]:
+    def key_num(k: str) -> tuple[int, str]:
         m = re.search(r"event[_-]?(\\d+)", k, re.IGNORECASE)
         return (int(m.group(1)) if m else 10**9, k)
 
@@ -193,7 +193,7 @@ def _load_prepared_event(path: str,
                          event_key: str,
                          crop_size: int,
                          divide_by_3: bool,
-                         cache: Dict[Tuple[str, str, int, bool], np.ndarray]) -> np.ndarray:
+                         cache: dict[tuple[str, str, int, bool], np.ndarray]) -> np.ndarray:
     cache_key = (path, event_key, crop_size, divide_by_3)
     cached = cache.get(cache_key)
     if cached is not None:
@@ -205,9 +205,9 @@ def _load_prepared_event(path: str,
     return arr
 
 
-def run_exp2(preds: Dict[str, Union[str, np.ndarray]],
-             observation: Union[str, np.ndarray],
-             nimrod_path: Union[str, np.ndarray, None],
+def run_exp2(preds: dict[str, str | np.ndarray],
+             observation: str | np.ndarray,
+             nimrod_path: str | np.ndarray | None,
              mask_train: np.ndarray,
              out_dir: str,
              crop_size: int,
@@ -228,7 +228,7 @@ def run_exp2(preds: Dict[str, Union[str, np.ndarray]],
         range_lines = []
         cmap, norm, _ = _build_paper_cmap()
         max_frames = 30
-        event_cache: Dict[Tuple[str, str, int, bool], np.ndarray] = {}
+        event_cache: dict[tuple[str, str, int, bool], np.ndarray] = {}
         for idx, event_key in enumerate(event_keys, start=1):
             obs_ev = _load_prepared_event(
                 observation, event_key, crop_size, divide_by_3, event_cache
@@ -247,7 +247,7 @@ def run_exp2(preds: Dict[str, Union[str, np.ndarray]],
                 input_ev = input_ev[:max_frames]
                 obs_ev_full = obs_ev_full[:max_frames]
 
-            preds_ev: Dict[str, np.ndarray] = {}
+            preds_ev: dict[str, np.ndarray] = {}
             for name, pred_src in preds.items():
                 if isinstance(pred_src, str):
                     pred_ev = _load_prepared_event(
@@ -301,7 +301,7 @@ def run_exp2(preds: Dict[str, Union[str, np.ndarray]],
     else:
         nimrod_arr = None
 
-    preds_aligned: Dict[str, np.ndarray] = {}
+    preds_aligned: dict[str, np.ndarray] = {}
     for name, pred in preds.items():
         pred_arr = np.asarray(pred)
         pred_arr = transform_mmhr(pred_arr, divide_by_3=divide_by_3)
@@ -375,11 +375,11 @@ def _center_crop(arr: np.ndarray, size: int) -> np.ndarray:
     return arr[top:top + size, left:left + size]
 
 
-def _load_event_images(folders: Dict[str, str],
+def _load_event_images(folders: dict[str, str],
                        method_order: Iterable[str],
                        event_id: int,
                        select_idx: Iterable[int],
-                       crop_size: int) -> Tuple[np.ndarray, List[str]]:
+                       crop_size: int) -> tuple[np.ndarray, list[str]]:
     rain_str = f"rain{event_id}"
     sample_folder = os.path.join(folders.get("Gauge", ""), rain_str)
     if not os.path.isdir(sample_folder):
@@ -449,22 +449,22 @@ def _event_key(event_id: int) -> str:
     return f"event_{int(event_id):02d}"
 
 
-def run_exp2_paper(folders: Dict[str, str],
+def run_exp2_paper(folders: dict[str, str],
                    method_order: Iterable[str],
-                   events: Iterable[Dict[str, object]],
+                   events: Iterable[dict[str, object]],
                    mask_path: str,
                    crop_size: int,
                    out_dir: str,
                    output_pdf: str,
                    crop_pdf: bool = False,
                    crop_output: str = "cropped_stitched.pdf",
-                   crop_y_ranges: Tuple[Tuple[float, float], ...] = ((0.019, 0.5), (0.58, 1.0)),
+                   crop_y_ranges: tuple[tuple[float, float], ...] = ((0.019, 0.5), (0.58, 1.0)),
                    crop_zoom: float = 3.0,
                    crop_margin_left: float = 0.0,
                    crop_margin_right: float = 0.0) -> None:
+    import matplotlib.pyplot as plt
     from matplotlib.cm import ScalarMappable
     from matplotlib.gridspec import GridSpec
-    import matplotlib.pyplot as plt
 
     ensure_dir(out_dir)
     cmap, norm, _ = _build_paper_cmap()
@@ -493,7 +493,7 @@ def run_exp2_paper(folders: Dict[str, str],
     cbar.ax.tick_params(labelsize=11)
 
     row_cursor = 0
-    event_cache: Dict[Tuple[str, str, int, bool], np.ndarray] = {}
+    event_cache: dict[tuple[str, str, int, bool], np.ndarray] = {}
     for event in events:
         ax_title = fig.add_subplot(gs[row_cursor, :])
         ax_title.axis("off")
@@ -525,8 +525,8 @@ def run_exp2_paper(folders: Dict[str, str],
 
 def run_exp2_paper_zarr(observation_path: str,
                         nimrod_path: str | None,
-                        methods: Dict[str, str],
-                        events: Iterable[Dict[str, object]],
+                        methods: dict[str, str],
+                        events: Iterable[dict[str, object]],
                         mask_path: str,
                         crop_size: int,
                         out_dir: str,
@@ -535,13 +535,13 @@ def run_exp2_paper_zarr(observation_path: str,
                         method_order: Iterable[str] | None = None,
                         crop_pdf: bool = False,
                         crop_output: str = "cropped_stitched.pdf",
-                        crop_y_ranges: Tuple[Tuple[float, float], ...] = ((0.019, 0.5), (0.58, 1.0)),
+                        crop_y_ranges: tuple[tuple[float, float], ...] = ((0.019, 0.5), (0.58, 1.0)),
                         crop_zoom: float = 3.0,
                         crop_margin_left: float = 0.0,
                         crop_margin_right: float = 0.0) -> None:
+    import matplotlib.pyplot as plt
     from matplotlib.cm import ScalarMappable
     from matplotlib.gridspec import GridSpec
-    import matplotlib.pyplot as plt
 
     ensure_dir(out_dir)
     cmap, norm, _ = _build_paper_cmap()
@@ -574,7 +574,7 @@ def run_exp2_paper_zarr(observation_path: str,
     cbar.ax.tick_params(labelsize=11)
 
     row_cursor = 0
-    event_cache: Dict[Tuple[str, str, int, bool], np.ndarray] = {}
+    event_cache: dict[tuple[str, str, int, bool], np.ndarray] = {}
     for event in events:
         ax_title = fig.add_subplot(gs[row_cursor, :])
         ax_title.axis("off")
@@ -643,7 +643,7 @@ def run_exp2_paper_zarr(observation_path: str,
 
 def _crop_pdf_panels(pdf_path: str,
                      output_path: str,
-                     y_ranges: Tuple[Tuple[float, float], ...],
+                     y_ranges: tuple[tuple[float, float], ...],
                      zoom: float,
                      margin_left: float,
                      margin_right: float) -> None:

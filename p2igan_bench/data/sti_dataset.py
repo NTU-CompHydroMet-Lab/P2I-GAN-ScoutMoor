@@ -1,10 +1,11 @@
 import os
-import torch
-import numpy as np
-from torchvision.transforms import Compose, Lambda
-import h5py
-import zarr
 import re
+
+import h5py
+import numpy as np
+import torch
+import zarr
+from torchvision.transforms import Compose, Lambda
 
 transform = Compose([
     Lambda(lambda x: torch.tensor(x))  # Convert to tensor
@@ -18,7 +19,7 @@ def create_mask(video_tensor, mask_file):
     """
     T, H, W, C = video_tensor.shape
     mask = torch.zeros((T, H, W, C), dtype=torch.float32)
-    with open(mask_file, "r") as f:
+    with open(mask_file) as f:
         mask_matrix = np.loadtxt(f)
     mask_matrix = torch.tensor(mask_matrix, dtype=torch.bool).unsqueeze(-1)
     if mask_matrix.shape != (H, W, 1):

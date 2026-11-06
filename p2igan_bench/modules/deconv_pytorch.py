@@ -1,13 +1,13 @@
-# coding=utf-8
 
 import math
-import torch
+
 import numpy as np
+import torch
 from torch.nn import functional as F
-from torch._jit_internal import Optional
-from torch.nn.parameter import Parameter
-from torch.nn.modules.module import Module
 from torch.nn import init
+from torch.nn.modules.module import Module
+from torch.nn.parameter import Parameter
+
 
 class DOConv2d(Module):
     """
@@ -20,11 +20,11 @@ class DOConv2d(Module):
     __constants__ = ['stride', 'padding', 'dilation', 'groups',
                      'padding_mode', 'output_padding', 'in_channels',
                      'out_channels', 'kernel_size', 'D_mul']
-    __annotations__ = {'bias': Optional[torch.Tensor]}
+    __annotations__ = {'bias': torch.Tensor | None}
 
     def __init__(self, in_channels, out_channels, kernel_size=3, D_mul=None, stride=1,
                  padding=1, dilation=1, groups=1, bias=False, padding_mode='zeros'):
-        super(DOConv2d, self).__init__()
+        super().__init__()
 
         kernel_size = (kernel_size, kernel_size)
         stride = (stride, stride)
@@ -37,8 +37,7 @@ class DOConv2d(Module):
             raise ValueError('out_channels must be divisible by groups')
         valid_padding_modes = {'zeros', 'reflect', 'replicate', 'circular'}
         if padding_mode not in valid_padding_modes:
-            raise ValueError("padding_mode must be one of {}, but got padding_mode='{}'".format(
-                valid_padding_modes, padding_mode))
+            raise ValueError(f"padding_mode must be one of {valid_padding_modes}, but got padding_mode='{padding_mode}'")
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = kernel_size
@@ -92,7 +91,7 @@ class DOConv2d(Module):
         return s.format(**self.__dict__)
 
     def __setstate__(self, state):
-        super(DOConv2d, self).__setstate__(state)
+        super().__setstate__(state)
         if not hasattr(self, 'padding_mode'):
             self.padding_mode = 'zeros'
 

@@ -6,7 +6,7 @@ import logging
 import random
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import numpy as np
 import torch
@@ -39,7 +39,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_config(path: Path) -> Dict[str, Any]:
+def load_config(path: Path) -> dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(path)
     with path.open("r", encoding="utf-8") as f:
@@ -57,7 +57,7 @@ def seed_everything(seed: int) -> None:
     torch.cuda.manual_seed_all(seed)
 
 
-def resolve_checkpoint(cfg: Dict[str, Any], args: argparse.Namespace) -> Path:
+def resolve_checkpoint(cfg: dict[str, Any], args: argparse.Namespace) -> Path:
     if args.checkpoint:
         return args.checkpoint
 
@@ -87,7 +87,7 @@ def prepare_batch(batch, device: torch.device):
     return frames, masked_frames, masks
 
 
-def main(args: Optional[argparse.Namespace] = None) -> None:
+def main(args: argparse.Namespace | None = None) -> None:
     parsed = args or parse_args()
     logging.basicConfig(
         level=getattr(logging, parsed.log_level.upper(), logging.INFO),
@@ -192,7 +192,7 @@ def main(args: Optional[argparse.Namespace] = None) -> None:
                     if end_idx > video_length:
                         pad_len = end_idx - video_length
 
-                        def _pad(x):
+                        def _pad(x, pad_len=pad_len):
                             return torch.cat([x, x[:, -1:, :, :, :].repeat(1, pad_len, 1, 1, 1)], dim=1)
 
                         current_frames = _pad(masked_frames[:, start_idx:end_idx])
@@ -220,7 +220,7 @@ def main(args: Optional[argparse.Namespace] = None) -> None:
                 event_name = f"event_{offset + 1:02d}"
 
                 if pass_idx == 0:
-                    event_ds = group.create_dataset(
+                    event_ds = group.create_array(
                         event_name,
                         shape=comp_frames.shape,
                         chunks=comp_frames.shape,

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Dict, Optional, Sequence
 
 import torch
 import torch.nn.functional as F
@@ -63,7 +63,7 @@ class RegressionMetrics(Metric):
             return tensor
         raise ValueError("Expected tensor with shape [B, T, C, H, W] or [B, C, H, W].")
 
-    def compute(self) -> Dict[str, float]:
+    def compute(self) -> dict[str, float]:
         mae = self.abs_sum / torch.clamp(self.n_obs, min=1.0)
         rmse = torch.sqrt(self.squared_sum / torch.clamp(self.n_obs, min=1.0))
         ssim_value = self.ssim.compute()
@@ -112,8 +112,8 @@ class CategoricalMetrics(Metric):
         self.false += false_alarms.to(torch.float32)
         self.correct += correct_negatives.to(torch.float32)
 
-    def compute(self) -> Dict[str, float]:
-        metrics: Dict[str, float] = {}
+    def compute(self) -> dict[str, float]:
+        metrics: dict[str, float] = {}
         for idx, thr in enumerate(self.thresholds.view(-1)):
             hits = self.hits[idx]
             misses = self.misses[idx]
@@ -172,8 +172,8 @@ class FractionalSkillScoreMetric(Metric):
         pad = scale // 2
         return F.avg_pool2d(tensor, kernel_size=scale, stride=1, padding=pad)
 
-    def compute(self) -> Dict[str, float]:
-        metrics: Dict[str, float] = {}
+    def compute(self) -> dict[str, float]:
+        metrics: dict[str, float] = {}
         for ti, thr in enumerate(self.thresholds):
             for si, scale in enumerate(self.scales):
                 if self.counts[ti, si] == 0:
@@ -194,12 +194,12 @@ class MetricConfig:
 class RainfallMetricSuite:
     """High-level orchestrator that bundles regression/categorical/FSS metrics."""
 
-    def __init__(self, config: Optional[MetricConfig] = None):
+    def __init__(self, config: MetricConfig | None = None):
         cfg = config or MetricConfig()
         self.regression = RegressionMetrics(apply_transform=cfg.apply_transform, data_range=cfg.data_range)
         self.categorical = CategoricalMetrics(cfg.thresholds)
         self.fss = FractionalSkillScoreMetric(cfg.thresholds, cfg.scales)
-        self.device: Optional[torch.device] = None
+        self.device: torch.device | None = None
 
     def to(self, device: torch.device):
         self.device = device
@@ -213,7 +213,7 @@ class RainfallMetricSuite:
         self.categorical.update(preds, target)
         self.fss.update(preds, target)
 
-    def compute(self) -> Dict[str, float]:
+    def compute(self) -> dict[str, float]:
         metrics = {}
         metrics.update(self.regression.compute())
         metrics.update(self.categorical.compute())

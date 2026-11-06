@@ -73,7 +73,7 @@ class DKPhi2DSubsampledMultiRes(nn.Module):
 
         knots_all = []
         theta_all = []
-        for M, sp in zip(self.num_basis_per_level, spacings):
+        for M, sp in zip(self.num_basis_per_level, spacings, strict=True):
 
             # In the original DeepKriging formulation, the spatial embedding is constructed 
             # using multi-resolution radial basis functions defined on a dense grid of knots, 

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Dict, Optional, Tuple, Union
-
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -56,7 +54,7 @@ def pss(pred: np.ndarray,
         gt: np.ndarray,
         bins: int = 50,
         min_value: float = 0.5,
-        value_range: Optional[Tuple[float, float]] = None) -> float:
+        value_range: tuple[float, float] | None = None) -> float:
     pred = np.asarray(pred, dtype=np.float32).ravel()
     gt = np.asarray(gt, dtype=np.float32).ravel()
 
@@ -120,7 +118,7 @@ def _ssim_reduce_torch(a: torch.Tensor,
                        b: torch.Tensor,
                        c1: float = 0.01**2,
                        c2: float = 0.03**2,
-                       dims: Tuple[int, ...] = (-2, -1)) -> torch.Tensor:
+                       dims: tuple[int, ...] = (-2, -1)) -> torch.Tensor:
     mu_a = a.mean(dim=dims, keepdim=True)
     mu_b = b.mean(dim=dims, keepdim=True)
     sig_a = ((a - mu_a) ** 2).mean(dim=dims, keepdim=True)
@@ -137,7 +135,7 @@ def _ssim_reduce_torch(a: torch.Tensor,
 
 def _prepare_spatiotemporal_tensors(pred: np.ndarray,
                                     gt: np.ndarray,
-                                    use_pool8: bool = True) -> Tuple[torch.Tensor, torch.Tensor]:
+                                    use_pool8: bool = True) -> tuple[torch.Tensor, torch.Tensor]:
     pred_t = _ensure_btchw(_to_tensor(pred))
     gt_t = _ensure_btchw(_to_tensor(gt))
     if use_pool8:
@@ -146,7 +144,7 @@ def _prepare_spatiotemporal_tensors(pred: np.ndarray,
     return pred_t[:, :, 0], gt_t[:, :, 0]
 
 
-def _masked_series(pred: np.ndarray, gt: np.ndarray, mask: np.ndarray, mode: str) -> Tuple[np.ndarray, np.ndarray]:
+def _masked_series(pred: np.ndarray, gt: np.ndarray, mask: np.ndarray, mode: str) -> tuple[np.ndarray, np.ndarray]:
     masked = _apply_mask_mode(pred, gt, mask, mode)
     return masked["pred"], masked["gt"]
 
@@ -233,7 +231,7 @@ def transform_mmhr(arr: np.ndarray, divide_by_3: bool = True) -> np.ndarray:
     return np.clip(out, 0.0, 200.0)
 
 
-def categorical_metrics(pred: np.ndarray, gt: np.ndarray, threshold: float) -> Dict[str, float]:
+def categorical_metrics(pred: np.ndarray, gt: np.ndarray, threshold: float) -> dict[str, float]:
     pred_bin = pred >= threshold
     gt_bin = gt >= threshold
     hits = np.logical_and(pred_bin, gt_bin).sum()
@@ -246,8 +244,8 @@ def categorical_metrics(pred: np.ndarray, gt: np.ndarray, threshold: float) -> D
     n_total = hits + misses + false_alarms + correct_negatives
     if n_total > 0:
         hss = 2 * (hits * correct_negatives - misses * false_alarms) / (
-            (misses**2 + false_alarms**2 + 2 * hits * correct_negatives +
-             (misses + false_alarms) * (hits + correct_negatives) + 1e-10)
+            misses**2 + false_alarms**2 + 2 * hits * correct_negatives +
+             (misses + false_alarms) * (hits + correct_negatives) + 1e-10
         )
     else:
         hss = float("nan")
@@ -258,7 +256,7 @@ def fss_window(obs: np.ndarray,
                pred: np.ndarray,
                threshold: float,
                win: int,
-               valid_mask: Optional[np.ndarray] = None) -> float:
+               valid_mask: np.ndarray | None = None) -> float:
     obs = ensure_thw(obs).astype(np.float32, copy=False)
     pred = ensure_thw(pred).astype(np.float32, copy=False)
     obs_bin = (obs >= threshold).astype(np.float32)
@@ -277,7 +275,7 @@ def fss_window(obs: np.ndarray,
     return float(1.0 - num / (denom + 1e-10))
 
 
-def _apply_mask_mode(pred: np.ndarray, gt: np.ndarray, mask: np.ndarray, mode: str) -> Dict[str, np.ndarray]:
+def _apply_mask_mode(pred: np.ndarray, gt: np.ndarray, mask: np.ndarray, mode: str) -> dict[str, np.ndarray]:
     if mode == "radar":
         pred_sel = select_by_mask(pred, mask, invert=True)
         gt_sel = select_by_mask(gt, mask, invert=True)
@@ -289,16 +287,16 @@ def _apply_mask_mode(pred: np.ndarray, gt: np.ndarray, mask: np.ndarray, mode: s
     return {"pred": pred_sel, "gt": gt_sel}
 
 
-def run_exp1(preds: Dict[str, Union[np.ndarray, Dict[str, np.ndarray]]],
-             truth: Union[np.ndarray, Dict[str, np.ndarray]],
+def run_exp1(preds: dict[str, np.ndarray | dict[str, np.ndarray]],
+             truth: np.ndarray | dict[str, np.ndarray],
              mask: np.ndarray,
              mode: str,
              crop_size: int,
-             thresholds: Tuple[float, ...] = (0.5, 2.0, 4.0, 8.0),
-             fss_scales: Tuple[int, ...] = (1, 2, 4, 8),
+             thresholds: tuple[float, ...] = (0.5, 2.0, 4.0, 8.0),
+             fss_scales: tuple[int, ...] = (1, 2, 4, 8),
              use_pool8: bool = True,
              divide_by_3: bool = True,
-             progress: bool = False) -> Dict[str, Dict[str, float]]:
+             progress: bool = False) -> dict[str, dict[str, float]]:
     if isinstance(truth, dict):
         event_keys = list(truth.keys())
         if not event_keys:
@@ -306,7 +304,7 @@ def run_exp1(preds: Dict[str, Union[np.ndarray, Dict[str, np.ndarray]]],
 
         truth_list = [truth[k] for k in event_keys if truth.get(k) is not None]
         truth_arr = np.concatenate(truth_list, axis=0) if truth_list else np.empty((0,))
-        preds_concat: Dict[str, np.ndarray] = {}
+        preds_concat: dict[str, np.ndarray] = {}
         for name, pred_src in preds.items():
             if not isinstance(pred_src, dict):
                 continue
@@ -317,7 +315,7 @@ def run_exp1(preds: Dict[str, Union[np.ndarray, Dict[str, np.ndarray]]],
         preds = preds_concat
         truth = truth_arr
 
-    results: Dict[str, Dict[str, float]] = {}
+    results: dict[str, dict[str, float]] = {}
     truth_raw_cropped = crop_center(truth, crop_size)
     truth_mmhr_cropped = transform_mmhr(truth_raw_cropped, divide_by_3=divide_by_3)
     pred_items = list(preds.items())

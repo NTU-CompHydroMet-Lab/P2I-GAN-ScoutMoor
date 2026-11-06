@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Dict, Tuple
+import math
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
 
 __all__ = [
     "ReconstructionLoss",
@@ -136,7 +135,7 @@ class AdversarialLoss(nn.Module):
         return self.criterion(outputs, labels)
 
 
-_GAN_LOSS_CACHE: Dict[Tuple[str, float, float], AdversarialLoss] = {}
+_GAN_LOSS_CACHE: dict[tuple[str, float, float], AdversarialLoss] = {}
 
 
 def gan_loss(

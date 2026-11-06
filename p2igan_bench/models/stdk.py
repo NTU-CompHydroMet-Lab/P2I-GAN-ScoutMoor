@@ -69,7 +69,7 @@ class DKPhi1D(nn.Module):
 
         knots_all = []
         theta_all = []
-        for M, sp in zip(self.num_basis, spacings):
+        for M, sp in zip(self.num_basis, spacings, strict=True):
             knots_full = self._make_level_knots(T, sp, device=device)
             knots_sub = self._subsample_knots_uniform(knots_full, M)  # [M,1]
             knots_all.append(knots_sub)
@@ -239,7 +239,7 @@ class DKPhi2DSubsampledMultiRes(nn.Module):
 
         knots_all = []
         theta_all = []
-        for M, sp in zip(self.num_basis_per_level, spacings):
+        for M, sp in zip(self.num_basis_per_level, spacings, strict=True):
             knots_full = self._make_level_grid_knots(H, W, sp, device=device)
             knots_sub  = self._subsample_knots_uniform(knots_full, M)  # [M,2]
             knots_all.append(knots_sub)

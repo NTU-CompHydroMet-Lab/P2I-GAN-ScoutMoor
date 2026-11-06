@@ -7,14 +7,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from p2igan_bench.modules.layer import (
-    BaseNetwork,
-    BasicConv_do,
-    ResBlock_do,
-    InputBlock,
-    DownsampleDuplicateChannels,
-    UP,
     C2,
     C3,
+    UP,
+    BaseNetwork,
+    BasicConv_do,
+    DownsampleDuplicateChannels,
+    InputBlock,
+    ResBlock_do,
 )
 
 

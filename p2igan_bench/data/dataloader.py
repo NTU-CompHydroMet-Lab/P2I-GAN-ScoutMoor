@@ -119,7 +119,7 @@ class P2IDataModule:
 
     @staticmethod
     def _collate_variable_length(batch):
-        videos, masked_videos, masks = zip(*batch)
+        videos, masked_videos, masks = zip(*batch, strict=True)
         max_len = max(v.shape[0] for v in videos)
 
         def _pad(seq):

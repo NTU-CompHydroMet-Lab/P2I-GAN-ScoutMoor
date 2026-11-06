@@ -2,21 +2,23 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import math
 import os
 import random
-import logging
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Dict, Iterable, Optional
+from typing import Any
 
+import matplotlib
 import mlflow
 import numpy as np
 import torch
+from PIL import Image, ImageDraw, ImageFont
 from torch.optim import Adam
 from torch.utils.data import DataLoader
-import matplotlib.cm as cm
-from PIL import Image, ImageDraw, ImageFont
 from torchvision.utils import make_grid, save_image
+
 from p2igan_bench.data.dataloader import P2IDataModule
 from p2igan_bench.models import build_discriminator, build_generator
 from p2igan_bench.modules import ReconstructionLoss, gan_loss
@@ -50,7 +52,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_config(path: Path) -> Dict[str, Any]:
+def load_config(path: Path) -> dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(path)
     with path.open("r", encoding="utf-8") as f:
@@ -68,8 +70,8 @@ def seed_everything(seed: int) -> None:
     torch.cuda.manual_seed_all(seed)
 
 
-def flatten_dict(data: Dict[str, Any], parent_key: str = "") -> Dict[str, Any]:
-    items: Dict[str, Any] = {}
+def flatten_dict(data: dict[str, Any], parent_key: str = "") -> dict[str, Any]:
+    items: dict[str, Any] = {}
     for key, value in data.items():
         new_key = f"{parent_key}.{key}" if parent_key else key
         if isinstance(value, dict):
@@ -82,7 +84,7 @@ def flatten_dict(data: Dict[str, Any], parent_key: str = "") -> Dict[str, Any]:
 
 
 class Trainer:
-    def __init__(self, cfg: Dict[str, Any]):
+    def __init__(self, cfg: dict[str, Any]):
         self.cfg = cfg
         seed_everything(cfg.get("seed", 42))
         self.device = torch.device(cfg.get("device", "cuda" if torch.cuda.is_available() else "cpu"))
@@ -346,7 +348,7 @@ class Trainer:
         self.last_dis_loss = dis_running / max(1, steps)
         return running_loss / max(1, steps)
 
-    def _evaluate_rec_loss(self, loader: Optional[DataLoader]) -> float:
+    def _evaluate_rec_loss(self, loader: DataLoader | None) -> float:
         if loader is None:
             return 0.0
         self.generator.eval()
@@ -363,7 +365,7 @@ class Trainer:
 
     def _log_examples(
         self,
-        loader: Optional[DataLoader],
+        loader: DataLoader | None,
         prefix: str,
         epoch: int,
         max_batches: int = 5,
@@ -375,7 +377,7 @@ class Trainer:
         save_dir = self.save_dir / "artifacts"
         save_dir.mkdir(parents=True, exist_ok=True)
 
-        for b_idx, batch in zip(range(max_batches), loader):
+        for b_idx, batch in zip(range(max_batches), loader, strict=False):
             frames, masked_frames, masks = self._prepare_batch(batch)
             with torch.no_grad():
                 preds = self.generator(masked_frames, masks)
@@ -420,7 +422,7 @@ class Trainer:
             float(seq.max().detach()),
         )
         out_frames = []
-        cmap = cm.get_cmap("viridis")
+        cmap = matplotlib.colormaps["viridis"]
         if vmin is None or vmax is None:
             vmin, vmax = stats[0], stats[2]
         for i in range(t):
@@ -465,7 +467,7 @@ class Trainer:
         torch.save(state, path)
 
 
-def main(args: Optional[argparse.Namespace] = None) -> None:
+def main(args: argparse.Namespace | None = None) -> None:
     parsed = args or parse_args()
     logging.info("Loading config from %s", parsed.config)
     config = load_config(parsed.config)

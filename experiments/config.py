@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Tuple
 
 
 @dataclass
 class ModeConfig:
     observation_path: str
-    methods: Dict[str, str]
+    methods: dict[str, str]
     mask_train_path: str
     mask_test_path: str
     nimrod_path: str
@@ -31,8 +30,8 @@ class ExperimentConfig:
     exp2_paper_one_event_per_pdf: bool = True
     exp2_paper_output_template: str = "event_{event_idx:02d}_id_{event_id:02d}.pdf"
     exp2_paper_crop_output: str = "cropped_stitched.pdf"
-    exp2_paper_mask_path: Optional[str] = None
-    exp2_paper_radar_method_order: Tuple[str, ...] = (
+    exp2_paper_mask_path: str | None = None
+    exp2_paper_radar_method_order: tuple[str, ...] = (
         "Radar",
         "P2I-GAN+",
         "P2I-GAN",
@@ -50,7 +49,7 @@ class ExperimentConfig:
     #     "DK (mse loss)", 
     #     "STDK (mse loss)",  
     # )
-    exp2_paper_gauge_method_order: Tuple[str, ...] = (
+    exp2_paper_gauge_method_order: tuple[str, ...] = (
         "Gauge",
         "Radar",
         "P2I-GAN+",
@@ -88,7 +87,7 @@ class ExperimentConfig:
     # )
 
     
-    exp2_paper_events: Tuple[Dict[str, object], ...] = (
+    exp2_paper_events: tuple[dict[str, object], ...] = (
         {"event_id": 1, "select_idx": [90, 91, 92, 93, 94, 95],
          "title": "Start Time : 2021-01-16 05:30:00 UTC"},
         {"event_id": 2, "select_idx": [60, 61, 62, 63, 64, 65],
@@ -111,8 +110,8 @@ class ExperimentConfig:
          "title": "Start Time : 2021-12-07 15:30:00 UTC"},
     )
 
-    exp2_paper_folders: Dict[str, str] = field(default_factory=dict)
-    data: Dict[str, ModeConfig] = field(default_factory=dict)
+    exp2_paper_folders: dict[str, str] = field(default_factory=dict)
+    data: dict[str, ModeConfig] = field(default_factory=dict)
 
 def build_config() -> ExperimentConfig:
     radar_mode = ModeConfig(

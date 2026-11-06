@@ -45,7 +45,7 @@ This repository provides training scripts, data preprocessing workflows, visuali
    git clone https://github.com/NTU-CompHydroMet-Lab/P2I-GAN-benchmark
    ```
 
-2. Install dependencies with uv (Python version and packages are pinned by `uv.lock`)
+2. Install dependencies with uv. Python 3.12 and all package versions are pinned by `uv.lock`; torch is the CUDA 12.6 build
 
    ```bash
    pip install -U uv
@@ -87,7 +87,7 @@ All config paths are relative to the repository root, so run every command from 
 | `weights/` | Released checkpoints, one directory per run |
 | `legacy/mlruns/` | MLflow metadata of the original runs (no artifacts) |
 
-`scripts/tools/` holds the scripts that built these datasets. Their raw inputs are still read from `/home/NAS/homes/brick-10015/Nimrod_2d_data`, which is not copied.
+`scripts/tools/` holds the scripts that built these datasets. They are kept as a record and are not maintained. Their raw inputs are still read from `/home/NAS/homes/brick-10015/Nimrod_2d_data`, which is not copied. Several of them start working as soon as they are imported or run, and `preprocess.py` and `tozarr.py` overwrite stores under `datasets/`.
 
 ### Tests
 
@@ -134,6 +134,9 @@ Run one of the following commands for training:
  # For training P2IGAN
  python scripts/train.py --config p2igan_bench/config/p2igan_gan_baseline.json
  
+ # MLflow 3 refuses the ./mlruns file store unless this is set
+ export MLFLOW_ALLOW_FILE_STORE=true
+
  # For monitoring in mlflow
  mlflow ui --backend-store-uri file:<project_path>/mlruns --port 5000
 

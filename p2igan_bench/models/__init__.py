@@ -1,6 +1,6 @@
 """Model registry for the benchmark."""
 
-from typing import Any, Dict
+from typing import Any
 
 import torch.nn as nn
 
@@ -11,18 +11,18 @@ from .p2iganwopos import P2IGenerator as P2IGeneratorWoPos
 from .stdk import STDKGenerator
 
 
-def _model_name(cfg: Dict[str, Any]) -> str:
+def _model_name(cfg: dict[str, Any]) -> str:
     try:
         return cfg["model"]["name"].lower()
     except KeyError as exc:
         raise KeyError("Config requires model.name") from exc
 
 
-def _sample_length(cfg: Dict[str, Any]) -> int:
+def _sample_length(cfg: dict[str, Any]) -> int:
     return cfg.get("data", {}).get("train", {}).get("sample_length", 16)
 
 
-def build_generator(cfg: Dict[str, Any]) -> nn.Module:
+def build_generator(cfg: dict[str, Any]) -> nn.Module:
     model_name = _model_name(cfg)
     if model_name == "p2igan":
         return P2IGenerator(cfg)
@@ -35,7 +35,7 @@ def build_generator(cfg: Dict[str, Any]) -> nn.Module:
     raise ValueError(f"Unknown model.name: {model_name}")
 
 
-def build_discriminator(cfg: Dict[str, Any]) -> nn.Module:
+def build_discriminator(cfg: dict[str, Any]) -> nn.Module:
     model_name = _model_name(cfg)
     seq_channels = cfg["model"].get("in_channels", 1) * _sample_length(cfg)
     if model_name == "p2igan":

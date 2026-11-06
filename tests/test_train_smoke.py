@@ -32,6 +32,7 @@ def test_two_training_steps(config_name, tmp_path, monkeypatch):
         pytest.skip("missing datasets/nimrod_h5")
     monkeypatch.chdir(ROOT)
     monkeypatch.setenv("MLFLOW_TRACKING_URI", (tmp_path / "mlruns").as_uri())
+    monkeypatch.setenv("MLFLOW_ALLOW_FILE_STORE", "true")
 
     cfg = json.loads((CONFIG_DIR / config_name).read_text())
     cfg["device"] = "cuda:0" if torch.cuda.is_available() else "cpu"
