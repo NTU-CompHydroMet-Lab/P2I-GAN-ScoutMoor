@@ -36,7 +36,7 @@ Input 是多個固定雨量站的時間序列，實際資料尚未取得。缺�
 | --- | --- | --- | --- | --- |
 | A 基線凍結 | local tag；複製 brick 依賴到 `datasets/`、`weights/`；路徑改為 repo 相對；`scripts/tools` 收進 repo；核對 MLflow 紀錄的訓練參數與現行 config；黃金測試 | 無 | S | Done |
 | B 清理 | 刪死碼與 mp4 路線、未用依賴、`.codex`；`.gitignore`；README 先刪錯誤內容 | A | S | Done |
-| C 升級 | Python 3.12 與套件、lock、pytest、ruff；黃金測試改容差比對 | B | M | Done |
+| C 升級 | Python 3.14 與套件、lock、pytest、ruff；torch 固定 2.14.1+cu126；黃金測試改容差比對並涵蓋 NIMROD | B | M | Done |
 | D Config | pydantic schema、`extra="forbid"`、全部 config 重寫；寫入新資料路徑 | C | M | Not started |
 | E Trainer | 修 `train.py:217`、`val_every_epochs`、resume、LR 排程；實驗紀錄改用 W&B（抽出 logger 介面） | D | S | Not started |
 | F 編碼與指標 | 單一 `RainCodec` 存進 checkpoint；指標重寫並接上驗證；刪三份舊 transform | D | M | Not started |
@@ -58,7 +58,7 @@ A 必須最先：黃金測試要在舊環境建立，後續才能證明行為未
 
 以下是在 v9 與 MIDAS `event_01` 上量到的現況。改動任何一項都會改變舊權重的輸出，所以只在新資料重新訓練時一起做。
 
-**結構。** 輸入是 `(B, T, H, W)` 的稀疏影像，只有 79 個雨量站像素有值。第一步把每個像素的 T 幀當成長度 16 的向量，經過 4 層 `AttentionBlock`：`out = relu(x · (1 + Conv1d_16→16(x)))`。這是時間軸上的乘法閘門，所有像素共用權重。因為是乘法，值為 0 的觀測永遠維持 0。第二步對雨量站像素的值做 3D IDW，鋪成完整的場。之後的網路只看得到這張 IDW 場：原始觀測與遮罩不再往下傳，輸出端也沒有加回 IDW 場的殘差。
+**結構。** 輸入是 `(B, T, H, W)` 的稀疏影像，只有 79 個雨量站像素有值。第一步把每個像素的 T 幀當成長度 16 的向量，經過 2 層 `AttentionBlock`（類別預設 4 層，兩個 P2I 模型都傳 `depth=2`）：`out = relu(x · (1 + Conv1d_16→16(x)))`。這是時間軸上的乘法閘門，所有像素共用權重。因為是乘法，值為 0 的觀測永遠維持 0。第二步對雨量站像素的值做 3D IDW，鋪成完整的場。之後的網路只看得到這張 IDW 場：原始觀測與遮罩不再往下傳，輸出端也沒有加回 IDW 場的殘差。
 
 **時空距離尺度。** x、y、t 各自除以 (W−1)、(H−1)、(T−1) 正規化到 0–1，再算歐氏距離。在 128×128、T=16 下，1 幀等於約 8.5 像素。這個比例只由視窗大小決定，沒有物理意義；改成 T=20 或 256×256 會悄悄改變時空權衡。新設計應該用明確的尺度參數，例如每幀對應多少公里。
 
@@ -66,9 +66,9 @@ A 必須最先：黃金測試要在舊環境建立，後續才能證明行為未
 
 **τ（`tau=0.05`）。** 權重是 `1/(d+τ)²`。沒有 τ 時，站上的權重無限大，IDW 在站點會精確等於觀測，近站也壓倒遠站；例如 d=0.01 與 0.1 的權重比是 100。加上 τ=0.05（約 6 像素）後同一比值只剩約 6，場較平滑，但站點像素不再等於觀測：站上自己只佔約 70% 權重，其餘來自同站前後幀與鄰站。τ 和平均站距（約 14 像素，0.11）同一量級，所以距離的影響被大幅攤平。
 
-**精度。** CUDA 上 IDW 的座標與距離用 float16，CPU 用 float32。在約 8.6% 的網格點兩者選到不同的 4 個鄰居，CPU 推論因此和訓練時的行為不一致。
+**精度與平手。** CUDA 上 IDW 的座標轉成 float16（距離在 autocast 下以 float32 計算），CPU 全用 float32；約 8.6% 的網格點兩者選到不同的 4 個鄰居，CPU 推論因此和訓練時的行為不一致。根本原因是規則網格讓大量網格點的第 4、第 5 近鄰距離完全相等，勝負取決於座標捨入；torch 2.15 改了 float16 `linspace` 的捨入，就讓每個視窗約 2.7% 的網格點換了鄰居，P2I 輸出局部差到 86。詳見 `docs/reports/p2i-numerical-instability.md`。
 
-待決：時空尺度參數化、k 與 τ 的取值或改成可學、IDW 一律 float32、是否把原始觀測與遮罩一併送進後續網路（例如加一個觀測通道），以及這些在新資料上的消融實驗。
+待決：時空尺度參數化、k 與 τ 的取值或改成可學、網格與雨量站座標同一路線計算並一律 float32 以上、在平手處連續的權重（取代硬性 top-k）、是否把原始觀測與遮罩一併送進後續網路（例如加一個觀測通道），以及這些在新資料上的消融實驗。
 
 ## 已定預設與待決
 
@@ -102,3 +102,6 @@ A 必須最先：黃金測試要在舊環境建立，後續才能證明行為未
 | 2026-11-06 | C | 升級後在 3080 上對黃金參考：DK、STDK 逐位元相同；v9 最大差 2.1、平均 0.006；wopos v9 最大差 1.65、平均 0.008。黃金測試容差 P2I 設 (2.5, 0.02)、DK/STDK 設為 0。全套 15 個測試通過 |
 | 2026-11-06 | C | 以新環境重跑作者的 exp1：gauge、radar 的所有指標與作者 `metrics.json` 相對差 ≤1.1e-5。nimrod 的 `metrics.json`（4/10）早於作者 4/11 修改 PSS 並移除 DTSSIM/NSE 的 commit，無法比對；其中 MAE、RMSE、SSIM 仍相同 |
 | 2026-11-06 | C | 事故：import 檢查誤載入 `scripts/tools/preprocess.py`，其模組層級以 `mode="w"` 開啟 `datasets/nimrod/nimrod_train.zarr`，刪掉本地副本 12686 個事件中的 3699 個。已自 brick 原檔補回：1,662,133 個檔案名稱與大小全部一致，無任何檔案的修改時間晚於事故前。brick 原檔與 isaac 資料未受影響。`scripts/tools` 之後只做 `py_compile`，不 import |
+| 2026-11-07 | C | 依新容器改為 Python 3.14。Python 3.14 的 DataLoader 改用 forkserver，dataset 的 `Lambda(lambda ...)` 無法 pickle，改成模組層級函式 |
+| 2026-11-07 | C | torch 2.15.0+cu132 讓 v9 對黃金參考最大差 63–86。逐層拆解定位到 `InputBlock`：torch 2.15 改了 float16 `linspace` 的捨入，網格座標移動一個最小單位，平手的鄰居選擇翻轉。torch 固定 `>=2.14.1,<2.15`、cu126，報告見 `docs/reports/p2i-numerical-instability.md` |
+| 2026-11-07 | C | Python 3.14 + torch 2.14.1+cu126 直接對作者輸出：gauge 10 事件、nimrod 20 事件，DK、STDK 逐位元相同；v9 最大差 2.16、wopos v9 最大差 1.81，平均 ≤0.013。作者的「P2I-GAN」輸出由 wopos v9 權重產生。作者 nimrod 驗證集複製到 `datasets/nimrod_h5/author_val`；黃金測試加入 NIMROD 與 wopos 對作者的比較，共 20 個測試全過，約 9.5 分鐘 |
