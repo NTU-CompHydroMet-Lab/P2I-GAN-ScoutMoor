@@ -45,7 +45,7 @@ This repository provides training scripts, data preprocessing workflows, visuali
    git clone https://github.com/NTU-CompHydroMet-Lab/P2I-GAN-benchmark
    ```
 
-2. Install dependencies with uv. Python 3.12 and all package versions are pinned by `uv.lock`; torch is the CUDA 12.6 build
+2. Install dependencies with uv. Python 3.14 and all package versions are pinned by `uv.lock`; torch is the CUDA 12.6 build and must stay below 2.15 (see `docs/reports/p2i-numerical-instability.md`)
 
    ```bash
    pip install -U uv
@@ -93,10 +93,10 @@ All config paths are relative to the repository root, so run every command from 
 
 ```bash
 uv run pytest -m "not slow"   # strict checkpoint loading, golden vs. author output
-uv run pytest                 # adds inference of v9, wopos v9, DK and STDK on the MIDAS gauge test set (CUDA, ~2.5 min)
+uv run pytest                 # adds inference of v9, wopos v9, DK and STDK on the MIDAS and NIMROD test sets (CUDA, ~10 min)
 ```
 
-The golden references in `datasets/golden/` were produced by tag `baseline-v0` on the GPU, driver and torch version recorded in their attrs. Every model is fed the MIDAS gauge test set. DK and STDK match the author's stored outputs bit for bit. v9 differs by at most 2 (on the 0–255 scale) for reasons not yet identified. Inference is bit-exact only on the recorded setup. On CPU, P2I results are not comparable, because the IDW in `InputBlock` runs in float16 on CUDA and in float32 on CPU.
+The golden references in `datasets/golden/` were produced by tag `baseline-v0` on the GPU, driver and torch version recorded in their attrs, with every model fed the MIDAS gauge test set. The NIMROD run (`datasets/nimrod_h5/author_val`, 20 events) is compared with the author's stored outputs directly. DK and STDK match the author bit for bit; the P2I models differ by at most about 2 on the 0–255 scale. On CPU, or with torch 2.15 or later, P2I results move much further, because the IDW in `InputBlock` depends on float16 coordinate rounding; `docs/reports/p2i-numerical-instability.md` explains why.
 
 ### Inference with Fake Data
 

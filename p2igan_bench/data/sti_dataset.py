@@ -5,11 +5,11 @@ import h5py
 import numpy as np
 import torch
 import zarr
-from torchvision.transforms import Compose, Lambda
 
-transform = Compose([
-    Lambda(lambda x: torch.tensor(x))  # Convert to tensor
-])
+
+def transform(x):
+    return torch.tensor(x)
+
 
 def create_mask(video_tensor, mask_file):
     """Return a float mask (T, H, W, C) with 1 at the gauge pixels listed in ``mask_file``.
