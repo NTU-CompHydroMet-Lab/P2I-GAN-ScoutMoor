@@ -40,6 +40,8 @@ def test_domain_split_parses_with_defaults():
         "start": "2020-01-01",
         "end": "2023-12-31",
         "gauges": "datasets/gauges_in_domain.csv",
+        "h": 128,
+        "w": 128,
     }
     split = Config.model_validate(cfg).data.train
     assert split.sample_length == 16

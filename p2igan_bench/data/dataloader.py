@@ -3,6 +3,7 @@ from copy import deepcopy
 import torch
 from torch.utils.data import DataLoader
 
+from .domain_dataset import DomainDataset
 from .sti_dataset import Dataset
 
 
@@ -11,12 +12,14 @@ class P2IDataModule:
         self.cfg = cfg
         data_cfg = cfg["data"]
         train_cfg = cfg["train"]
-        if any(split and split.get("kind") == "domain" for split in data_cfg.values()):
-            raise NotImplementedError("data split kind 'domain' is not implemented yet")
         self.num_workers = train_cfg.get("num_workers", 0)
         self.pin_memory = train_cfg.get("pin_memory", True)
         self.persistent_workers = train_cfg.get("persistent_workers", True)
         self.prefetch_factor = train_cfg.get("prefetch_factor", 2)
+
+        if data_cfg["train"].get("kind") == "domain":
+            self._init_domain(data_cfg)
+            return
 
         train_cfg = data_cfg["train"]
         self.train_args = self._build_dataset_args(train_cfg)
@@ -45,6 +48,16 @@ class P2IDataModule:
             self.test_args = self._build_dataset_args(test_cfg, defaults=test_defaults)
             self.test_shuffle = bool(test_cfg.get("shuffle", False))
             self.test_dataset = Dataset(self.test_args)
+
+    def _init_domain(self, data_cfg):
+        splits = {name: data_cfg.get(name) for name in ("train", "valid", "test")}
+        if any(split and split.get("kind") != "domain" for split in splits.values()):
+            raise ValueError("domain and event splits cannot be mixed")
+        self.train_dataset = DomainDataset(splits["train"])
+        self.valid_dataset = DomainDataset(splits["valid"]) if splits["valid"] else None
+        self.test_dataset = DomainDataset(splits["test"]) if splits["test"] else None
+        self.valid_shuffle = bool(splits["valid"].get("shuffle", False)) if splits["valid"] else False
+        self.test_shuffle = bool(splits["test"].get("shuffle", False)) if splits["test"] else False
 
     def train_dataloader(self):
         train_bs = self.cfg["train"]["batch_size"]

@@ -56,6 +56,8 @@ class DomainSplit(_Strict):
     start: str
     end: str
     gauges: str
+    h: int
+    w: int
     sample_length: int = 16
     stride: int = 1
     selection: WindowSelection = WindowSelection()
