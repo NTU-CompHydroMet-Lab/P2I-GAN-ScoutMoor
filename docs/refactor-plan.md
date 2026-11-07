@@ -43,7 +43,7 @@
 | A 基線凍結 | local tag；複製 brick 依賴到 `datasets/`、`weights/`；路徑改為 repo 相對；`scripts/tools` 收進 repo；核對 MLflow 紀錄的訓練參數與現行 config；黃金測試 | 無 | S | Done |
 | B 清理 | 刪死碼與 mp4 路線、未用依賴、`.codex`；`.gitignore`；README 先刪錯誤內容 | A | S | Done |
 | C 升級 | Python 3.14 與套件、lock、pytest、ruff；torch 固定 2.14.1+cu126；黃金測試改容差比對並涵蓋 NIMROD | B | M | Done |
-| D Config | pydantic schema、`extra="forbid"`、全部 config 重寫；寫入新資料路徑 | C | M | Not started |
+| D Config | pydantic schema、`extra="forbid"`、全部 config 重寫；寫入新資料路徑 | C | M | In progress |
 | E Trainer | 修 `train.py:217`、`val_every_epochs`、resume、LR 排程；實驗紀錄改用 W&B（抽出 logger 介面） | D | S | Not started |
 | F 編碼與指標 | 單一 `RainCodec` 存進 checkpoint；指標重寫並接上驗證；刪三份舊 transform | D | M | Not started |
 | G 模型泛化 | T 參數化、H/W 檢查、合併 wopos、DK/STDK 的 k 由遮罩推導；InputBlock 重新設計（見下節） | D | M | Not started |
@@ -83,7 +83,10 @@ A 必須最先：黃金測試要在舊環境建立，後續才能證明行為未
 - **切分**：train 2010–2020、test 2021–2022（可與舊事件比較）、val 2023–2024、2025 保留為最後留出集。H1 若發現雷達網斷層再調整。
 - **模型尺度**：第一版用 `x = dBZ/85`，與舊尺度相同但不量化，保住 `weighted_l1` 的 `x_max=0.70`。換尺度另做受控實驗。
 - **儲存**：新資料保留 int16 原值，讀取時轉浮點，不再用 uint8。
-- **事件篩選**：門檻改為 config 參數。舊腳本註解寫 20%、code 是 0.3，不直接沿用。
+- **事件篩選**：沿用舊規則，門檻做成 config 參數：視窗內任一幀，中心區有 ≥30% 像素非零（v ≥ 1，即 R > 0.036 mm/h）且至少一個像素 v ≥ 84（R ≥ 2.0 mm/h）。舊規則以 40 幀的 1024×1024 檔案為單位；新管線改為對裁切後的研究區逐視窗計算，換門檻只需重算索引，不必另建資料集。
+- **DK、STDK**：第一版不移植，只保留舊版供黃金測試。
+- **原則**：先以最少改動讓新資料的訓練跑通；屬於實驗性質的改動（IDW 尺度、閘門、dropout、DK/STDK）之後再做。
+- **算力**：可用 H200；模型小，3080 也能訓練。預算可以放寬。
 - **遮罩**：真實站點到手前用可替換的合成固定站點。
 - **權重**：舊權重不移植到新區域，只用於基線測試。
 - **站點數**：P2I 對輸入點數沒有限制（`InputBlock` 取遮罩上所有非零的 (t, y, x)）；DK、STDK 把 79 寫死在 `topk` 與 MLP 輸入寬度（`T × 79`），換成 176 站或隨機丟站都要改 G 包。
@@ -93,11 +96,11 @@ A 必須最先：黃金測試要在舊環境建立，後續才能證明行為未
 
 - [x] 雨量站座標與目標區域：`datasets/gauges_in_domain.csv`，176 個像素。研究區以 Scout Moor 與 Manchester Airport 的中點取整（E 382000、N 402000）為中心、各方向 64 km：E 318000–446000、N 338000–466000，即 NIMROD row 1084–1211、col 723–850。中心之後可能改，改了要重新訓練。
 - [x] 時間解析度：保留雷達的 5 分鐘，T=16 即 80 分鐘視窗。
-- [x] 訓練年份：2020–2023。驗證與測試年份待定。
+- [x] 年份：train 2020–2023、val 2024、test 2025。
 - [x] label 的缺測像素在 loss 中遮掉。
-- [ ] 輸入碰到缺測（雨量站像素在某幀無雷達值）的處理方式。
-- [ ] 訓練時是否依日期模擬站點缺測（只用當時有紀錄的站），或固定 176 站再隨機丟站。
-- [ ] 模型尺度：新資料是 `mm/h*32` 的降雨率，不是 dBZ；「已定預設」的 `x = dBZ/85` 要在 F 包重新決定。
+- [ ] 輸入碰到缺測：IDW 本身不受影響（遮罩是逐 (t, y, x)，缺的點直接不參與），問題只在 `AttentionBlock` 的閘門混合 16 幀、看不到遮罩，會把缺測當成 0 雨量。第一版先跳過輸入有缺測的視窗；閘門改成會略過缺測屬於 G 的實驗。H1 量到缺測比例後再確認。
+- [x] 第一版固定 176 個站點像素，不丟站。整站丟棄與逐點丟棄兩種 dropout 都列為之後的實驗（逐點丟棄需要先改 `AttentionBlock`）。
+- [x] 模型尺度沿用 P2I：`v = 48·log10(R/0.036)`、`x = v/255`（R ≤ 0.036 mm/h 為 0）。作者的解碼 `R = 0.036·10^(v/48)` 見 brick `Nimrod_2d_data/NIMROD_Reader/nimrod_video_export.ipynb`；新管線以浮點計算、不量化成 uint8。
 - [ ] 雨量計資料的單位與時間解析度。模型用雷達點值訓練、用雨量計推論，兩者偏差在 I 包量測。
 - [ ] 舊資料的原始編碼腳本沒有找到；`v=48·log10(R/0.036)` 即 3×dBZ 是推導，尚未由程式確認。
 
@@ -120,3 +123,5 @@ A 必須最先：黃金測試要在舊環境建立，後續才能證明行為未
 | 2026-11-07 | C | Python 3.14 + torch 2.14.1+cu126 直接對作者輸出：gauge 10 事件、nimrod 20 事件，DK、STDK 逐位元相同；v9 最大差 2.16、wopos v9 最大差 1.81，平均 ≤0.013。作者的「P2I-GAN」輸出由 wopos v9 權重產生。作者 nimrod 驗證集複製到 `datasets/nimrod_h5/author_val`；黃金測試加入 NIMROD 與 wopos 對作者的比較，共 20 個測試全過，約 9.5 分鐘 |
 | 2026-11-07 | — | 確定訓練設定：輸入是雨量站像素上的雷達序列，label 是整張雷達場。雨量站表 `datasets/gauges_in_domain.csv` 與 NIMROD 網格逐點對齊；D 與 H1 同步進行 |
 | 2026-11-07 | — | 研究區、訓練年份 2020–2023、5 分鐘解析度、label 缺測遮罩確定。以真實 176 站與現行 IDW 尺度（1 幀 ≈ 8.5 km），4 個鄰居來自 1/2/3/4 站的網格點比例為 0.3/32.6/29.0/38.1% |
+| 2026-11-07 | D | `p2igan_bench/config/schema.py`：pydantic schema，未知 key 一律報錯；`train.py` 與 `infer.py` 載入時驗證，`Trainer` 建構時也驗證。程式仍收同結構的 dict，行為不變。刪掉 config 中程式從未讀取的 key（`hole_weight`、`valid_weight`、`fractal_weight`、`temp_weight`、`use_fractal`、`decay`、`d2glr`、`save_freq`、`valid_freq`、`niter_steady`、`use_test`、`base_channels`、`comod`、`data.*.name`、遮罩的 `keep`/`block_sizes`/`interval`）。新增 `kind: "domain"` 的資料區段定義（store、年份、站點表、視窗長度、篩選門檻），dataset 尚未實作 |
+| 2026-11-07 | H1/H2 | `scripts/data/build_domain_store.py`：從 isaac 的月檔裁出研究區，寫成單一 `datasets/nimrod_domain.zarr`（2020–2025，int16 原值、規則 5 分鐘時間軸、缺的時間點補 -1 並標記），附逐幀統計（缺測像素數、濕像素數、最大值）。各月 `time` 的起點是該月月初，已換成絕對時間 |
