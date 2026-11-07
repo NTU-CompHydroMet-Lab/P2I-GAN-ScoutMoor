@@ -159,7 +159,10 @@ class Trainer:
         self.gen = self.generator
         self.dis = self.discriminator
         if train_cfg.get("compile", False):
-            # The discriminator's spectral norm updates its buffers in place, which breaks under compile.
+            # InputBlock's data-dependent kNN fails to compile under bf16 autocast; the discriminator's
+            # spectral norm updates its buffers in place, which breaks under compile.
+            if hasattr(self.generator, "input"):
+                self.generator.input.forward = torch.compiler.disable(self.generator.input.forward)
             self.gen = torch.compile(self.generator)
 
     def _maybe_resume(self) -> None:
