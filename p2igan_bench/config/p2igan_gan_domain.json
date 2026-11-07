@@ -68,6 +68,8 @@
         "log_step": 100,
         "iterations": 200000,
         "niter": 20000,
-        "use_validation": true
+        "use_validation": true,
+        "cudnn_benchmark": true,
+        "compile": true
     }
 }

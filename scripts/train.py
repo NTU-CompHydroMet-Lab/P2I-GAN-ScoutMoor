@@ -34,6 +34,7 @@ def parse_args() -> argparse.Namespace:
         default=Path("p2igan_bench/config/p2igan_baseline.json"),
         help="Path to JSON/YAML config file.",
     )
+    parser.add_argument("--save-dir", type=Path, default=None, help="Run directory; overrides save_dir in the config")
     parser.add_argument("--experiment-name", type=str, default=None, help="MLflow experiment name")
     parser.add_argument("--run-name", type=str, default=None, help="MLflow run name")
     parser.add_argument("--tracking-uri", type=str, default=None, help="Optional MLflow tracking URI")
@@ -516,6 +517,8 @@ def main(args: argparse.Namespace | None = None) -> None:
     logging.info("Loading config from %s", parsed.config)
     config = load_config(parsed.config)
     train_cfg = config.setdefault("train", {})
+    if getattr(parsed, "save_dir", None):
+        config["save_dir"] = str(parsed.save_dir)
     if parsed.experiment_name:
         config["experiment_name"] = parsed.experiment_name
     if parsed.run_name:
