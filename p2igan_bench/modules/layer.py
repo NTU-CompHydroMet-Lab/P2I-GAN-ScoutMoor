@@ -112,6 +112,34 @@ def _get_grid_points(D, H, W, device, dtype):
     return gp
 
 
+_KNN_CACHE = {}
+
+
+def _knn_weights(points_xyz, gp_all, k, rho, tau, chunk, use_cuda_amp):
+    """Per-chunk neighbour indices and normalised IDW weights; they depend only on the point coordinates,
+    so they are reused while the same points come back (a fixed gauge mask)."""
+    key = (tuple(gp_all.shape), k, rho, tau, chunk, use_cuda_amp, str(points_xyz.device), points_xyz.dtype)
+    hit = _KNN_CACHE.get(key)
+    if hit is not None and hit[0].shape == points_xyz.shape and torch.equal(hit[0], points_xyz):
+        return hit[1]
+
+    parts = []
+    with torch.amp.autocast("cuda", enabled=use_cuda_amp):
+        for start in range(0, gp_all.shape[0], chunk):
+            gp = gp_all[start : start + chunk]
+            dists = torch.cdist(gp, points_xyz)
+            d_k, idx_k = torch.topk(dists, k, dim=1, largest=False)
+            if abs(rho - 2.0) < 1e-6:
+                inv = 1.0 / (d_k + tau)
+                w = inv * inv
+            else:
+                w = 1.0 / (d_k + tau).pow(rho)
+            w = w / (w.sum(dim=1, keepdim=True) + 1e-12)
+            parts.append((start, idx_k, w))
+    _KNN_CACHE[key] = (points_xyz.clone(), parts)
+    return parts
+
+
 def idw_3d_knn(points_xyz, values, out_shape, k=8, rho=2.0, tau=1e-3, chunk=16384, device=None, dtype=None, use_amp=True):
     if device is None:
         device = points_xyz.device
@@ -127,24 +155,11 @@ def idw_3d_knn(points_xyz, values, out_shape, k=8, rho=2.0, tau=1e-3, chunk=1638
     out_vals = torch.empty(Q, device=device, dtype=dtype)
 
     use_cuda_amp = use_amp and device.type == "cuda"
+    parts = _knn_weights(points_xyz, gp_all, k, rho, tau, chunk, use_cuda_amp)
 
     with torch.amp.autocast("cuda", enabled=use_cuda_amp):
-        for start in range(0, Q, chunk):
-            end = min(start + chunk, Q)
-            gp = gp_all[start:end]
-
-            dists = torch.cdist(gp, points_xyz)
-            d_k, idx_k = torch.topk(dists, k, dim=1, largest=False)
-            vals_k = values[idx_k]
-
-            if abs(rho - 2.0) < 1e-6:
-                inv = 1.0 / (d_k + tau)
-                w = inv * inv
-            else:
-                w = 1.0 / (d_k + tau).pow(rho)
-
-            w = w / (w.sum(dim=1, keepdim=True) + 1e-12)
-            out_vals[start:end] = (vals_k * w).sum(dim=1)
+        for start, idx_k, w in parts:
+            out_vals[start : start + idx_k.shape[0]] = (values[idx_k] * w).sum(dim=1)
 
     return out_vals.reshape(D, H, W)
 
