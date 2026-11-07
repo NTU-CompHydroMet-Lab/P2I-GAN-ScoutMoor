@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import logging
 import math
@@ -147,6 +148,43 @@ class Trainer:
         self.viz_vmin = viz_cfg.get("vmin")
         self.viz_vmax = viz_cfg.get("vmax")
 
+        self.start_epoch = 1
+        self.mlflow_run_id = None
+        self._maybe_resume()
+
+        torch.backends.cudnn.benchmark = bool(train_cfg.get("cudnn_benchmark", False))
+        self.amp = contextlib.nullcontext
+        if train_cfg.get("amp", "off") == "bf16":
+            self.amp = lambda: torch.autocast(device_type=self.device.type, dtype=torch.bfloat16)
+        self.gen = self.generator
+        self.dis = self.discriminator
+        if train_cfg.get("compile", False):
+            # The discriminator's spectral norm updates its buffers in place, which breaks under compile.
+            self.gen = torch.compile(self.generator)
+
+    def _maybe_resume(self) -> None:
+        """Continue from ``save_dir/latest.pt`` if it exists; a fresh run needs a new ``save_dir``."""
+        path = self.save_dir / "latest.pt"
+        if not path.exists():
+            return
+        state = torch.load(path, map_location=self.device, weights_only=True)
+        self.generator.load_state_dict(state["generator"])
+        self.opt_g.load_state_dict(state["optimizer_g"])
+        if self.discriminator is not None:
+            self.discriminator.load_state_dict(state["discriminator"])
+            self.opt_d.load_state_dict(state["optimizer_d"])
+        self.global_step = int(state["global_step"])
+        self.start_epoch = int(state["epoch"]) + 1
+        self.best_val = float(state.get("best_val", float("inf")))
+        self.mlflow_run_id = state.get("mlflow_run_id")
+        logging.info(
+            "Resumed from %s: epoch %d done, global_step %d, best_val %.4f",
+            path,
+            self.start_epoch - 1,
+            self.global_step,
+            self.best_val,
+        )
+
     def _log_gpu_stats(self) -> None:
         if self.device.type != "cuda" or not torch.cuda.is_available():
             return
@@ -162,9 +200,14 @@ class Trainer:
             mlflow.set_experiment(experiment_name)
 
         run_name = self.cfg.get("run_name")
-        with mlflow.start_run(run_name=run_name):
-            mlflow.log_params(flatten_dict(self.cfg))
-            for epoch in range(1, self.max_epochs + 1):
+        if self.global_step >= self.max_steps:
+            logging.info("Already at max steps (%d); nothing to train.", self.max_steps)
+            return
+        with mlflow.start_run(run_id=self.mlflow_run_id, run_name=None if self.mlflow_run_id else run_name):
+            if self.mlflow_run_id is None:
+                mlflow.log_params(flatten_dict(self.cfg))
+                self.mlflow_run_id = mlflow.active_run().info.run_id
+            for epoch in range(self.start_epoch, self.max_epochs + 1):
                 logging.info("Epoch %d/%d starting...", epoch, self.max_epochs)
                 train_loss = self._train_one_epoch(epoch)
                 mlflow.log_metric("train/loss", train_loss, step=self.global_step)
@@ -186,7 +229,7 @@ class Trainer:
                 self._save_checkpoint(latest_ckpt, epoch)
                 mlflow.log_artifact(str(latest_ckpt))
                 
-                if val_loss < self.best_val:
+                if self.run_validation and self.val_loader is not None and val_loss < self.best_val:
                     self.best_val = val_loss
                     checkpoint = self.save_dir / "best.pt"
                     self._save_checkpoint(checkpoint, epoch)
@@ -214,7 +257,9 @@ class Trainer:
         for batch in self.train_loader:
 
             frames, masked_frames, masks = self._prepare_batch(batch)
-            preds = self.generator(masked_frames, masks)
+            with self.amp():
+                preds = self.gen(masked_frames, masks)
+            preds = preds.float()
             loss_g, loss_dict = self.rec_loss(preds, frames, masks)
             rec_loss_val = float(loss_g.detach())
             rec_running += rec_loss_val
@@ -234,8 +279,9 @@ class Trainer:
                 for p in self.discriminator.parameters():
                     p.requires_grad_(True)
 
-                logits_fake = self.discriminator(preds.detach())
-                logits_real = self.discriminator(frames)
+                with self.amp():
+                    logits_fake = self.dis(preds.detach()).float()
+                    logits_real = self.dis(frames).float()
                 loss_d = (
                     gan_loss(
                         logits_real,
@@ -270,7 +316,8 @@ class Trainer:
                 for p in self.discriminator.parameters():
                     p.requires_grad_(False)
 
-                logits_fake_for_g = self.discriminator(preds)
+                with self.amp():
+                    logits_fake_for_g = self.dis(preds).float()
                 adv_loss = gan_loss(
                     logits_fake_for_g,
                     True,
@@ -348,8 +395,9 @@ class Trainer:
         with torch.no_grad():
             for batch in loader:
                 frames, masked_frames, masks = self._prepare_batch(batch)
-                preds = self.generator(masked_frames, masks)
-                loss, _ = self.rec_loss(preds, frames, masks)
+                with self.amp():
+                    preds = self.gen(masked_frames, masks)
+                loss, _ = self.rec_loss(preds.float(), frames, masks)
                 total_loss += float(loss.detach())
                 batches += 1
         return total_loss / max(1, batches)
@@ -451,6 +499,8 @@ class Trainer:
             "global_step": self.global_step,
             "generator": self.generator.state_dict(),
             "optimizer_g": self.opt_g.state_dict(),
+            "best_val": self.best_val,
+            "mlflow_run_id": self.mlflow_run_id,
         }
         if self.discriminator is not None and self.opt_d is not None:
             state["discriminator"] = self.discriminator.state_dict()

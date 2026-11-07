@@ -109,6 +109,9 @@ class TrainConfig(_Strict):
     max_epochs: int | None = None
     niter: int = 1
     use_validation: bool = True
+    cudnn_benchmark: bool = False
+    amp: Literal["off", "bf16"] = "off"
+    compile: bool = False
 
 
 class VizConfig(_Strict):
