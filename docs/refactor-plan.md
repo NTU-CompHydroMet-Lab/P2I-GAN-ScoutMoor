@@ -129,3 +129,6 @@ A 必須最先：黃金測試要在舊環境建立，後續才能證明行為未
 | 2026-11-07 | H1 | 舊篩選規則（任一幀 ≥30% 濕、峰值 ≥2 mm/h）並排除含缺測幀的 16 幀視窗：train 89,369 個（stride 1；不重疊 6,043）、val 23,458、test 17,893，約佔全部視窗的 17–22%。放寬到 ≥10% 濕約為兩倍。因為缺測很少，第一版直接排除含缺測的視窗，label 不會有缺測，loss 遮罩先不需要 |
 | 2026-11-08 | H3 | `p2igan_bench/data/domain_dataset.py`：從研究區 store 依門檻切 16 幀視窗、排除含缺測的視窗，輸入為 176 個站點像素，輸出格式與舊 `Dataset` 相同，模型、loss、`Trainer` 不變。所需幀載入共享記憶體（train 3.4 GB，載入約 4.5 分鐘）。val、test 用 stride 16（1,584、1,207 個視窗） |
 | 2026-11-08 | J | 第一次訓練 `p2igan_bench/config/p2igan_gan_domain.json`：v9 的 loss 與最佳化設定、200,000 iterations、batch 12，3080 約 1.06 it/s，預估 52 小時。300 步試跑 rec loss 0.70 → 0.32、val 0.45 → 0.42 |
+| 2026-11-08 | E | `Trainer` 可從 `save_dir/latest.pt` 續跑（含 MLflow run id、`best_val`）；修掉關閉驗證時 `val_loss` 未定義。新增 `cudnn_benchmark`、`amp: "bf16"`、`compile` 三個開關，預設關閉；compile 不含 discriminator（舊式 spectral norm）與 `InputBlock`。`scripts/train_jobs/` 仿 circqpe 提供 slurm 與本機訓練腳本 |
+| 2026-11-08 | G | 量測發現 `InputBlock` 佔生成器一步的 82%：每個樣本都對 262,144 個網格點重算 kNN。鄰居與權重只取決於座標，改為依點集快取；輸出與梯度逐位元相同，forward 677 → 12 ms，全套測試 40 個通過（4 分鐘）。3080 上一步：無開關 4.09 it/s、cudnn+compile 4.15、加 bf16 7.28 |
+| 2026-11-08 | J | 300 步試跑之外的第一次長跑在 5,600 步停止（保留於 `weights/p2igan_gan_domain_v0_trial`），以 cudnn+compile 重新開始 `weights/domain-v1`，預估 13–14 小時 |
