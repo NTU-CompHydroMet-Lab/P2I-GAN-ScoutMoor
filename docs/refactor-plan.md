@@ -47,7 +47,7 @@
 | E Trainer | 修 `train.py:217`、`val_every_epochs`、resume、LR 排程；實驗紀錄改用 W&B（抽出 logger 介面） | D | S | Not started |
 | F 編碼與指標 | 單一 `RainCodec` 存進 checkpoint；指標重寫並接上驗證；刪三份舊 transform | D | M | Not started |
 | G 模型泛化 | T 參數化、H/W 檢查、合併 wopos、DK/STDK 的 k 由遮罩推導；InputBlock 重新設計（見下節） | D | M | Not started |
-| H1 資料探勘 | 各年缺幀、無資料區變動、雷達網年代差異、雨量分布 | C | S | Not started |
+| H1 資料探勘 | 各年缺幀、無資料區變動、雷達網年代差異、雨量分布 | C | S | In progress |
 | H2 前處理 | 裁固定區域、重新 chunk、事件篩選、年份切分索引、無資料遮罩 | H1、F、區域決定 | M | Not started |
 | H3 Dataset | 單一 Zarr Dataset、單位與尺寸檢查、地理固定遮罩 | H2、D | M | Not started |
 | I 雨量站介面 | 站點表轉遮罩；推論端從時序組輸入張量；單位驗證 | H3、F | M | Not started |
@@ -125,3 +125,5 @@ A 必須最先：黃金測試要在舊環境建立，後續才能證明行為未
 | 2026-11-07 | — | 研究區、訓練年份 2020–2023、5 分鐘解析度、label 缺測遮罩確定。以真實 176 站與現行 IDW 尺度（1 幀 ≈ 8.5 km），4 個鄰居來自 1/2/3/4 站的網格點比例為 0.3/32.6/29.0/38.1% |
 | 2026-11-07 | D | `p2igan_bench/config/schema.py`：pydantic schema，未知 key 一律報錯；`train.py` 與 `infer.py` 載入時驗證，`Trainer` 建構時也驗證。程式仍收同結構的 dict，行為不變。刪掉 config 中程式從未讀取的 key（`hole_weight`、`valid_weight`、`fractal_weight`、`temp_weight`、`use_fractal`、`decay`、`d2glr`、`save_freq`、`valid_freq`、`niter_steady`、`use_test`、`base_channels`、`comod`、`data.*.name`、遮罩的 `keep`/`block_sizes`/`interval`）。新增 `kind: "domain"` 的資料區段定義（store、年份、站點表、視窗長度、篩選門檻），dataset 尚未實作 |
 | 2026-11-07 | H1/H2 | `scripts/data/build_domain_store.py`：從 isaac 的月檔裁出研究區，寫成單一 `datasets/nimrod_domain.zarr`（2020–2025，int16 原值、規則 5 分鐘時間軸、缺的時間點補 -1 並標記），附逐幀統計（缺測像素數、濕像素數、最大值）。各月 `time` 的起點是該月月初，已換成絕對時間 |
+| 2026-11-07 | H1 | `datasets/nimrod_domain.zarr` 建好（1.7 GB，72 個月）。2020–2025 沒有缺時間點；有缺測像素的幀每年 16–200 幀（<0.2%），多數是整幀缺；雨量站像素有缺的幀共 346 幀（0.05%）。研究區沒有無資料區。超過 100 mm/h 的像素幀共 29,097 個，空間上分散（最多的 10 個像素只佔 0.7%），看不出固定雜波 |
+| 2026-11-07 | H1 | 舊篩選規則（任一幀 ≥30% 濕、峰值 ≥2 mm/h）並排除含缺測幀的 16 幀視窗：train 89,369 個（stride 1；不重疊 6,043）、val 23,458、test 17,893，約佔全部視窗的 17–22%。放寬到 ≥10% 濕約為兩倍。因為缺測很少，第一版直接排除含缺測的視窗，label 不會有缺測，loss 遮罩先不需要 |
