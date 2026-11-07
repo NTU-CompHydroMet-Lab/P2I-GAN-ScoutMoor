@@ -96,13 +96,7 @@ NIMROD_TEST = {
     "data_root": "datasets/nimrod_h5/author_val",
     "w": 128,
     "h": 128,
-    "mask": {
-        "type": "stis",
-        "keep": 4,
-        "block_sizes": [10],
-        "interval": [2, 3, 4, 5, 6],
-        "file": "datasets/masks/gauge_mask_1024_train.txt",
-    },
+    "mask": {"type": "stis", "file": "datasets/masks/gauge_mask_1024_train.txt"},
     "shuffle": False,
     "sample_length": None,
 }

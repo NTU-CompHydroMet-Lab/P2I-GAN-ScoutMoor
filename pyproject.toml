@@ -10,6 +10,7 @@ dependencies = [
     "mlflow>=3.0",
     "numpy>=2.3",
     "pillow>=11.0",
+    "pydantic>=2.10",
     "pyyaml>=6.0",
     "torch>=2.14.1,<2.15",
     "torchmetrics>=1.8",

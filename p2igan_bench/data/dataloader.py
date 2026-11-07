@@ -11,6 +11,8 @@ class P2IDataModule:
         self.cfg = cfg
         data_cfg = cfg["data"]
         train_cfg = cfg["train"]
+        if any(split and split.get("kind") == "domain" for split in data_cfg.values()):
+            raise NotImplementedError("data split kind 'domain' is not implemented yet")
         self.num_workers = train_cfg.get("num_workers", 0)
         self.pin_memory = train_cfg.get("pin_memory", True)
         self.persistent_workers = train_cfg.get("persistent_workers", True)

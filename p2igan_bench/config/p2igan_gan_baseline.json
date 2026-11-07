@@ -1,89 +1,65 @@
 {
-  "seed": 2024,
-  "device": "cuda:0",
-  "save_dir": "weights/p2igan_gan_v9",
-  "experiment_name": "p2igan-gan-v9",
-  "run_name": "debug-run-001",
-  "description": "P2I-GANv9 enhanced pmloss to improve distribution at long tail.",
-  
-  "model": {
-    "name": "p2igan",
-    "in_channels": 1,
-    "out_channels": 1,
-    "base_channels": 64,
-    "comod": {
-      "use_cond_mod": 0,
-      "z_dim": 512
-    }
-  },
-  "data": {
+    "seed": 2024,
+    "device": "cuda:0",
+    "save_dir": "weights/p2igan_gan_v9",
+    "experiment_name": "p2igan-gan-v9",
+    "run_name": "debug-run-001",
+    "description": "P2I-GANv9 enhanced pmloss to improve distribution at long tail.",
+    "model": {
+        "name": "p2igan",
+        "in_channels": 1,
+        "out_channels": 1
+    },
+    "data": {
+        "train": {
+            "data_root": "datasets/nimrod_h5/train",
+            "w": 128,
+            "h": 128,
+            "sample_length": 16,
+            "mask": {
+                "type": "stis",
+                "file": "datasets/masks/gauge_mask_1024_train.txt"
+            }
+        },
+        "valid": {
+            "data_root": "datasets/nimrod_h5/test",
+            "shuffle": false
+        },
+        "test": {
+            "data_root": "datasets/midas/midas_test.zarr",
+            "w": 128,
+            "h": 128,
+            "mask": {
+                "type": "stis",
+                "file": "datasets/masks/gauge_mask_128_train.txt"
+            },
+            "shuffle": false,
+            "sample_length": null
+        }
+    },
+    "loss": {
+        "adversarial_weight": 0.01,
+        "k1_weight": 0.05,
+        "use_pm": true,
+        "pm_weight": 10.0,
+        "gan_loss": "hinge",
+        "use_gan": true
+    },
     "train": {
-      "name": "youtube-vos",
-      "data_root": "datasets/nimrod_h5/train",
-      "w": 128,
-      "h": 128,
-      "sample_length": 16,
-      "mask": {
-        "type": "stis",
-        "keep": 4,
-        "block_sizes": [10],
-        "interval": [2, 3, 4, 5, 6],
-        "file": "datasets/masks/gauge_mask_1024_train.txt"
-      }
-    },
-    "valid": {
-      "data_root": "datasets/nimrod_h5/test",
-      "shuffle": false
-    },
-    "test": {
-      "data_root": "datasets/midas/midas_test.zarr",
-      "w": 128,
-      "h": 128,
-      "mask": {
-        "type": "stis",
-        "keep": 4,
-        "block_sizes": [10],
-        "interval": [2, 3, 4, 5, 6],
-        "file": "datasets/masks/gauge_mask_128_train.txt"
-      },
-      "shuffle": false,
-      "sample_length": null
+        "optimizer": {
+            "type": "Adam",
+            "beta1": 0.0,
+            "beta2": 0.99,
+            "lr": 0.0001
+        },
+        "batch_size": 12,
+        "num_workers": 4,
+        "pin_memory": true,
+        "persistent_workers": true,
+        "prefetch_factor": 2,
+        "log_step": 100,
+        "iterations": 200000,
+        "niter": 20000,
+        "use_validation": true
     }
-  },
-  "loss": {
-    "hole_weight": 1.0,
-    "valid_weight": 1.0,
-    "adversarial_weight": 0.01,
-    "fractal_weight": 0.0,
-    "k1_weight": 0.05,
-    "use_pm": 1,
-    "pm_weight": 10.0,
-    "temp_weight": 0.0,
-    "gan_loss": "hinge",
-    "use_gan": 1,
-    "use_fractal": 0
-  },
-  "train": {
-    "optimizer": {
-      "type": "Adam",
-      "beta1": 0.0,
-      "beta2": 0.99,
-      "lr": 0.0001,
-      "decay": 0.99995,
-      "d2glr": 1.0
-    },
-    "batch_size": 12,
-    "num_workers": 4,
-    "pin_memory": true,
-    "persistent_workers": true,
-    "prefetch_factor": 2,
-    "log_step": 100,
-    "save_freq": 5000,
-    "valid_freq": 10000,
-    "iterations": 200000,
-    "niter": 20000,
-    "niter_steady": 50000,
-    "use_validation": true,
-    "use_test": false
-  }
 }

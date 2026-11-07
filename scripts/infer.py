@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import random
 import time
@@ -12,6 +11,7 @@ import numpy as np
 import torch
 import zarr
 
+from p2igan_bench.config import load_config
 from p2igan_bench.data.dataloader import P2IDataModule
 from p2igan_bench.models import build_generator
 
@@ -37,17 +37,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--overwrite", action="store_true", help="Overwrite existing output zarr.")
     parser.add_argument("--log-level", type=str, default="INFO", help="Logging level (DEBUG, INFO, WARNING)")
     return parser.parse_args()
-
-
-def load_config(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        raise FileNotFoundError(path)
-    with path.open("r", encoding="utf-8") as f:
-        if path.suffix in {".yaml", ".yml"}:
-            import yaml
-
-            return yaml.safe_load(f)
-        return json.load(f)
 
 
 def seed_everything(seed: int) -> None:

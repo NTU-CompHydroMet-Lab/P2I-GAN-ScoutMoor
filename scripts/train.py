@@ -19,6 +19,7 @@ from torch.optim import Adam
 from torch.utils.data import DataLoader
 from torchvision.utils import make_grid, save_image
 
+from p2igan_bench.config import load_config, validate_config
 from p2igan_bench.data.dataloader import P2IDataModule
 from p2igan_bench.models import build_discriminator, build_generator
 from p2igan_bench.modules import ReconstructionLoss, gan_loss
@@ -52,17 +53,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_config(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        raise FileNotFoundError(path)
-    with path.open("r", encoding="utf-8") as f:
-        if path.suffix in {".yaml", ".yml"}:
-            import yaml
-
-            return yaml.safe_load(f)
-        return json.load(f)
-
-
 def seed_everything(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
@@ -85,6 +75,7 @@ def flatten_dict(data: dict[str, Any], parent_key: str = "") -> dict[str, Any]:
 
 class Trainer:
     def __init__(self, cfg: dict[str, Any]):
+        cfg = validate_config(cfg)
         self.cfg = cfg
         seed_everything(cfg.get("seed", 42))
         self.device = torch.device(cfg.get("device", "cuda" if torch.cuda.is_available() else "cpu"))
