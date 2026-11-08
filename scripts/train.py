@@ -17,8 +17,10 @@ from torch.optim import Adam
 from torch.utils.data import DataLoader
 from torchvision.utils import make_grid, save_image
 
+from p2igan_bench.codec import P2I_CODEC
 from p2igan_bench.config import load_config, validate_config
 from p2igan_bench.data.dataloader import P2IDataModule
+from p2igan_bench.metrics import RainScores
 from p2igan_bench.models import build_discriminator, build_generator
 from p2igan_bench.modules import ReconstructionLoss, gan_loss
 from p2igan_bench.run_logger import RunLogger
@@ -218,9 +220,14 @@ class Trainer:
                 validated = self.run_validation and self.val_loader is not None
                 if validated:
                     logging.info("Running validation...")
-                    val_loss = self._evaluate_rec_loss(self.val_loader)
+                    val_loss, val_scores = self._validate(self.val_loader)
                     metrics["val/loss"] = val_loss
-                    logging.info("Validation done | val_loss=%.4f", val_loss)
+                    metrics.update({f"val/{k}": v for k, v in val_scores.items()})
+                    logging.info(
+                        "Validation done | val_loss=%.4f | %s",
+                        val_loss,
+                        " ".join(f"{k}={v:.3f}" for k, v in val_scores.items()),
+                    )
 
                 self._save_checkpoint(self.save_dir / "latest.pt", epoch)
                 if validated and val_loss < self.best_val:
@@ -381,10 +388,10 @@ class Trainer:
         self.last_dis_loss = dis_running / max(1, steps)
         return running_loss / max(1, steps)
 
-    def _evaluate_rec_loss(self, loader: DataLoader | None) -> float:
-        if loader is None:
-            return 0.0
+    def _validate(self, loader: DataLoader) -> tuple[float, dict[str, float]]:
+        """Mean reconstruction loss and rain scores in mm/h over ``loader``."""
         self.generator.eval()
+        scores = RainScores(P2I_CODEC)
         total_loss = 0.0
         batches = 0
         with torch.no_grad():
@@ -392,10 +399,12 @@ class Trainer:
                 frames, masked_frames, masks = self._prepare_batch(batch)
                 with self.amp():
                     preds = self.gen(masked_frames, masks)
-                loss, _ = self.rec_loss(preds.float(), frames, masks)
+                preds = preds.float()
+                loss, _ = self.rec_loss(preds, frames, masks)
                 total_loss += float(loss.detach())
+                scores.update(preds, frames, masks)
                 batches += 1
-        return total_loss / max(1, batches)
+        return total_loss / max(1, batches), scores.compute()
 
     def _log_examples(
         self,
@@ -498,6 +507,7 @@ class Trainer:
             "optimizer_g": self.opt_g.state_dict(),
             "best_val": self.best_val,
             "wandb_run_id": self.wandb_run_id,
+            "codec": P2I_CODEC.to_dict(),
         }
         if self.discriminator is not None and self.opt_d is not None:
             state["discriminator"] = self.discriminator.state_dict()

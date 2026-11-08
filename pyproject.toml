@@ -12,7 +12,6 @@ dependencies = [
     "pydantic>=2.10",
     "pyyaml>=6.0",
     "torch>=2.14.1,<2.15",
-    "torchmetrics>=1.8",
     "torchvision>=0.29.1",
     "wandb>=0.28",
     "zarr>=3.1",

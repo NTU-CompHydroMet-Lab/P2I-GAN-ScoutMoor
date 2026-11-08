@@ -1,7 +1,7 @@
 """Fixed-length windows from the cropped NIMROD domain store, observed at the gauge pixels.
 
 Items match the legacy ``Dataset``: ``(video, masked_video, mask)``, each ``(T, H, W, 1)`` float32,
-with rain rate encoded as ``v = 48 * log10(R / 0.036)`` clipped to 0-255 and divided by 255.
+with rain rate on the P2I scale (``p2igan_bench.codec``).
 """
 
 from __future__ import annotations
@@ -11,14 +11,14 @@ import pandas as pd
 import torch
 import zarr
 
+from p2igan_bench.codec import P2I_CODEC
+
 RAW_PER_MMH = 32.0
 
 
 def encode(raw: torch.Tensor) -> torch.Tensor:
     """Raw store units (mm/h * 32) to the P2I scale in [0, 1]."""
-    rain = raw.float().clamp_min(0) / RAW_PER_MMH
-    v = 48.0 * torch.log10(torch.clamp(rain, min=1e-6) / 0.036)
-    return v.clamp(0.0, 255.0) / 255.0
+    return P2I_CODEC.encode(raw.float().clamp_min(0) / RAW_PER_MMH)
 
 
 def gauge_pixels(csv_path: str, easting: np.ndarray, northing: np.ndarray) -> np.ndarray:

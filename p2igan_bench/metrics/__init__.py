@@ -1,5 +1,5 @@
-"""Metric helpers for P2I-GAN."""
+"""Rain scores for validation and evaluation."""
 
-from .metric import MetricConfig, RainfallMetricSuite
+from .rain import RainScores
 
-__all__ = ["MetricConfig", "RainfallMetricSuite"]
+__all__ = ["RainScores"]
