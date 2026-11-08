@@ -5,6 +5,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn.utils.parametrizations import spectral_norm
 
 from .deconv_pytorch import DOConv2d
 
@@ -265,11 +266,27 @@ class UP(nn.Module):
 
 
 def C2(cin, cout, k=3, s=1, p=1):
-    return nn.utils.spectral_norm(nn.Conv2d(cin, cout, kernel_size=k, stride=s, padding=p))
+    return spectral_norm(nn.Conv2d(cin, cout, kernel_size=k, stride=s, padding=p))
 
 
 def C3(cin, cout, kt=3, ks=3, st=(1, 1, 1), pt=(1, 1, 1)):
-    return nn.utils.spectral_norm(nn.Conv3d(cin, cout, kernel_size=(kt, ks, ks), stride=st, padding=pt))
+    return spectral_norm(nn.Conv3d(cin, cout, kernel_size=(kt, ks, ks), stride=st, padding=pt))
+
+
+_OLD_SPECTRAL_NORM_KEYS = {
+    "weight_orig": "parametrizations.weight.original",
+    "weight_u": "parametrizations.weight.0._u",
+    "weight_v": "parametrizations.weight.0._v",
+}
+
+
+def upgrade_spectral_norm_keys(state_dict, prefix, *args):
+    """Load-state-dict pre-hook renaming keys of the hook-based ``nn.utils.spectral_norm`` to the
+    parametrization-based one, so checkpoints written before the switch still load."""
+    for key in [k for k in state_dict if k.startswith(prefix)]:
+        module_path, _, leaf = key.rpartition(".")
+        if leaf in _OLD_SPECTRAL_NORM_KEYS:
+            state_dict[f"{module_path}.{_OLD_SPECTRAL_NORM_KEYS[leaf]}"] = state_dict.pop(key)
 
 
 __all__ = [

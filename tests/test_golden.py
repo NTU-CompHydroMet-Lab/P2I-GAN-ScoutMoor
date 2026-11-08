@@ -22,7 +22,7 @@ import pytest
 import torch
 import zarr
 
-from p2igan_bench.models import build_generator
+from p2igan_bench.models import build_discriminator, build_generator
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_DIR = ROOT / "p2igan_bench" / "config"
@@ -61,6 +61,16 @@ def test_checkpoint_loads_strictly(config_name, in_root):
     generator = build_generator(cfg)
     state = torch.load(ckpt_path, map_location="cpu", weights_only=True)
     generator.load_state_dict(state["generator"], strict=True)
+
+
+@pytest.mark.parametrize("config_name", ["p2igan_gan_baseline.json", "p2igan_ganwopos_baseline.json"])
+def test_discriminator_loads_pre_parametrization_checkpoint(config_name, in_root):
+    ckpt_path = CHECKPOINTS[config_name]
+    _require(ckpt_path)
+    cfg = json.loads((CONFIG_DIR / config_name).read_text())
+    state = torch.load(ckpt_path, map_location="cpu", weights_only=True)["discriminator"]
+    assert any(k.endswith("weight_orig") for k in state)
+    build_discriminator(cfg).load_state_dict(state, strict=True)
 
 
 GAUGE_TEST_CONFIG = "p2igan_gan_baseline.json"

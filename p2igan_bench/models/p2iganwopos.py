@@ -15,6 +15,8 @@ from p2igan_bench.modules.layer import (
     DownsampleDuplicateChannels,
     InputBlock,
     ResBlock_do,
+    spectral_norm,
+    upgrade_spectral_norm_keys,
 )
 
 
@@ -128,11 +130,12 @@ class P2IDiscriminator(BaseNetwork):
             nn.LeakyReLU(0.2, True),
             C3(128, 128, kt=3, ks=3, st=(2, 1, 1), pt=(1, 1, 1)),
             nn.LeakyReLU(0.2, True),
-            nn.utils.spectral_norm(nn.Conv3d(128, 1, kernel_size=1)),
+            spectral_norm(nn.Conv3d(128, 1, kernel_size=1)),
         )
 
         self.alpha2d = nn.Parameter(torch.tensor(0.0))
         self.alpha3d = nn.Parameter(torch.tensor(0.0))
+        self._register_load_state_dict_pre_hook(upgrade_spectral_norm_keys)
 
         if init_weights:
             self.init_weights()
