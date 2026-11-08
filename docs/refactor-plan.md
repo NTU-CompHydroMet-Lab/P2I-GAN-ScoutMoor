@@ -43,8 +43,8 @@
 | A 基線凍結 | local tag；複製 brick 依賴到 `datasets/`、`weights/`；路徑改為 repo 相對；`scripts/tools` 收進 repo；核對 MLflow 紀錄的訓練參數與現行 config；黃金測試 | 無 | S | Done |
 | B 清理 | 刪死碼與 mp4 路線、未用依賴、`.codex`；`.gitignore`；README 先刪錯誤內容 | A | S | Done |
 | C 升級 | Python 3.14 與套件、lock、pytest、ruff；torch 固定 2.14.1+cu126；黃金測試改容差比對並涵蓋 NIMROD | B | M | Done |
-| D Config | pydantic schema、`extra="forbid"`、全部 config 重寫；寫入新資料路徑 | C | M | In progress |
-| E Trainer | 修 `train.py:217`、`val_every_epochs`、resume、LR 排程；實驗紀錄改用 W&B（抽出 logger 介面） | D | S | Not started |
+| D Config | pydantic schema、`extra="forbid"`、全部 config 重寫；寫入新資料路徑 | C | M | Done |
+| E Trainer | 修 `train.py:217`、`val_every_epochs`、resume、LR 排程；實驗紀錄改用 W&B（抽出 logger 介面） | D | S | In progress |
 | F 編碼與指標 | 單一 `RainCodec` 存進 checkpoint；指標重寫並接上驗證；刪三份舊 transform | D | M | Not started |
 | G 模型泛化 | T 參數化、H/W 檢查、合併 wopos、DK/STDK 的 k 由遮罩推導；InputBlock 重新設計（見下節） | D | M | Not started |
 | H1 資料探勘 | 各年缺幀、無資料區變動、雷達網年代差異、雨量分布 | C | S | In progress |
@@ -132,3 +132,6 @@ A 必須最先：黃金測試要在舊環境建立，後續才能證明行為未
 | 2026-11-08 | E | `Trainer` 可從 `save_dir/latest.pt` 續跑（含 MLflow run id、`best_val`）；修掉關閉驗證時 `val_loss` 未定義。新增 `cudnn_benchmark`、`amp: "bf16"`、`compile` 三個開關，預設關閉；compile 不含 discriminator（舊式 spectral norm）與 `InputBlock`。`scripts/train_jobs/` 仿 circqpe 提供 slurm 與本機訓練腳本 |
 | 2026-11-08 | G | 量測發現 `InputBlock` 佔生成器一步的 82%：每個樣本都對 262,144 個網格點重算 kNN。鄰居與權重只取決於座標，改為依點集快取；輸出與梯度逐位元相同，forward 677 → 12 ms，全套測試 40 個通過（4 分鐘）。3080 上一步：無開關 4.09 it/s、cudnn+compile 4.15、加 bf16 7.28 |
 | 2026-11-08 | J | 300 步試跑之外的第一次長跑在 5,600 步停止（保留於 `weights/p2igan_gan_domain_v0_trial`），以 cudnn+compile 重新開始 `weights/domain-v1`，預估 13–14 小時 |
+| 2026-11-08 | — | 新 repo `NTU-CompHydroMet-Lab/P2I-GAN-ScoutMoor` 設為 `origin`，`main` 與 `refactor` 一致；作者原 repo 改名為 `original`，不再推送。Slurm 暫緩，模型小，本機 3080 足夠 |
+| 2026-11-08 | E | 實驗紀錄改用 W&B，取代 MLflow（仿 circqpe）：`p2igan_bench/run_logger.py`，config 的 `log_to_wandb`、`wandb_project`，W&B run id 存進 checkpoint 供續跑；step 指標以 `global_step`、epoch 指標以 `epoch` 為 x 軸，每個 epoch 上傳範例圖。不再把 checkpoint 上傳成 artifact |
+| 2026-11-08 | E/G | Discriminator 改用 `parametrizations.spectral_norm`，可以 compile；載入時把舊鍵名（`weight_orig`/`weight_u`/`weight_v`）改成新鍵名，v9 與 domain-v1 的舊 checkpoint 都能嚴格載入，eval 輸出與舊版逐位元相同。compile 與 bf16 同時開啟可正常訓練與續跑 |
