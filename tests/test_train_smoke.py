@@ -80,3 +80,22 @@ def test_resume_continues_from_latest(tmp_path, monkeypatch):
         assert torch.equal(value.cpu(), saved["generator"][name]), name
     second.train()
     assert second.global_step == 4
+
+
+@pytest.mark.slow
+def test_step_based_checkpoints_and_lr_schedule(tmp_path, monkeypatch):
+    cfg = _smoke_config("p2igan_gan_baseline.json", tmp_path, monkeypatch)
+    cfg["data"]["train"]["data_root"] = str(_link_events(H5_ROOT / "train", tmp_path / "train3", 3))
+    cfg["train"].update(iterations=3, val_every_steps=2)
+    cfg["train"]["optimizer"].update(lr_schedule="cosine", lr_min=1e-5, warmup_steps=1)
+    trainer = _train_module().Trainer(cfg)
+    assert trainer._lr_factor(0) == 1.0  # end of the one-step warmup
+    assert trainer._lr_factor(3) == pytest.approx(1e-5 / cfg["train"]["optimizer"]["lr"])
+    trainer.train()
+    state = torch.load(tmp_path / "weights" / "latest.pt", map_location="cpu", weights_only=True)
+    assert trainer.global_step == 3 and state["global_step"] == 3  # final checkpoint off the 2-step grid
+    assert (tmp_path / "weights" / "best.pt").exists()
+    assert sorted(p.name for p in (tmp_path / "weights" / "artifacts").glob("val_*")) == [
+        "val_step2_batch0_ex0.png",
+        "val_step3_batch0_ex0.png",
+    ]

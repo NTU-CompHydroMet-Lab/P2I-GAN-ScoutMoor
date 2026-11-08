@@ -95,6 +95,10 @@ class OptimizerConfig(_Strict):
     lr: float
     beta1: float = 0.0
     beta2: float = 0.99
+    lr_schedule: Literal["constant", "cosine", "exponential"] = "constant"
+    lr_min: float = 0.0
+    lr_decay: float = 1.0
+    warmup_steps: int = 0
 
 
 class TrainConfig(_Strict):
@@ -109,6 +113,7 @@ class TrainConfig(_Strict):
     max_epochs: int | None = None
     niter: int = 1
     use_validation: bool = True
+    val_every_steps: int | None = None
     cudnn_benchmark: bool = False
     amp: Literal["off", "bf16"] = "off"
     compile: bool = False

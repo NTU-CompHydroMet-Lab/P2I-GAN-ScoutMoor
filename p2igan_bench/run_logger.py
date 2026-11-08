@@ -65,7 +65,7 @@ class RunLogger:
         if self.run is not None:
             self.run.log({"global_step": global_step, **metrics})
 
-    def log_epoch(self, epoch: int, metrics: dict[str, float], images: dict[str, list[Path]] | None = None) -> None:
+    def log_epoch(self, epoch: float, metrics: dict[str, float], images: dict[str, list[Path]] | None = None) -> None:
         if self.run is None:
             return
         payload: dict[str, Any] = {"epoch": epoch, **metrics}

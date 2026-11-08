@@ -125,6 +125,13 @@ class Trainer:
                 self.max_epochs = train_cfg.get("niter", 1)
         if self.max_steps is None:
             self.max_steps = self.max_epochs * max(1, len(self.train_loader))
+        self.epoch_limit = train_cfg.get("max_epochs")
+        self.val_every_steps = train_cfg.get("val_every_steps")
+        self.base_lr = float(opt_cfg["lr"])
+        self.lr_schedule = opt_cfg.get("lr_schedule", "constant")
+        self.lr_min = float(opt_cfg.get("lr_min", 0.0))
+        self.lr_decay = float(opt_cfg.get("lr_decay", 1.0))
+        self.warmup_steps = int(opt_cfg.get("warmup_steps", 0))
 
         self.best_val = float("inf")
         self.last_rec_loss = 0.0
@@ -204,47 +211,79 @@ class Trainer:
         )
         self.wandb_run_id = self.logger.run_id
         try:
-            for epoch in range(self.start_epoch, self.max_epochs + 1):
+            epoch = self.start_epoch
+            while self.global_step < self.max_steps and (self.epoch_limit is None or epoch <= self.epoch_limit):
                 logging.info("Epoch %d/%d starting...", epoch, self.max_epochs)
                 train_loss = self._train_one_epoch(epoch)
                 metrics = {"epoch/train_loss": train_loss, "epoch/rec_loss": self.last_rec_loss}
                 if self.use_gan:
                     metrics.update({"epoch/adv_loss": self.last_adv_loss, "epoch/dis_loss": self.last_dis_loss})
                 logging.info("Epoch %d completed | train_loss=%.4f | global_step=%d", epoch, train_loss, self.global_step)
-                images = {
-                    "examples/train": self._log_examples(
-                        self.train_loader, prefix="train", epoch=epoch, max_batches=1, samples_per_batch=1
-                    )
-                }
-
-                validated = self.run_validation and self.val_loader is not None
-                if validated:
-                    logging.info("Running validation...")
-                    val_loss, val_scores = self._validate(self.val_loader)
-                    metrics["val/loss"] = val_loss
-                    metrics.update({f"val/{k}": v for k, v in val_scores.items()})
-                    logging.info(
-                        "Validation done | val_loss=%.4f | %s",
-                        val_loss,
-                        " ".join(f"{k}={v:.3f}" for k, v in val_scores.items()),
-                    )
-
-                self._save_checkpoint(self.save_dir / "latest.pt", epoch)
-                if validated and val_loss < self.best_val:
-                    self.best_val = val_loss
-                    checkpoint = self.save_dir / "best.pt"
-                    self._save_checkpoint(checkpoint, epoch)
-                    logging.info("New best model saved at %s (val_loss=%.4f)", checkpoint, self.best_val)
-                if validated:
-                    metrics["val/best_loss"] = self.best_val
-                images["examples/val"] = self._log_examples(self.val_loader, prefix="val", epoch=epoch)
-                self.logger.log_epoch(epoch, metrics, images)
-
-                if self.global_step >= self.max_steps:
-                    logging.info("Reached max steps (%d). Stopping training.", self.max_steps)
-                    break
+                if self.val_every_steps is None:
+                    period_metrics, images = self._evaluate_and_checkpoint(completed_epochs=epoch, label=f"epoch{epoch}")
+                    metrics.update(period_metrics)
+                    self.logger.log_epoch(epoch, metrics, images)
+                else:
+                    self.logger.log_epoch(epoch, metrics)
+                epoch += 1
+            if self.val_every_steps is not None and self.global_step % self.val_every_steps != 0:
+                period_metrics, images = self._evaluate_and_checkpoint(
+                    completed_epochs=epoch - 1, label=f"step{self.global_step}"
+                )
+                self.logger.log_epoch(self.global_step / self.train_steps_per_epoch, period_metrics, images)
+            logging.info("Reached max steps (%d). Stopping training.", self.max_steps)
         finally:
             self.logger.finish()
+
+    def _evaluate_and_checkpoint(self, completed_epochs: int, label: str) -> tuple[dict, dict]:
+        """Validate, write ``latest.pt`` (and ``best.pt`` on improvement) and render examples."""
+        metrics: dict[str, float] = {}
+        images = {
+            "examples/train": self._log_examples(
+                self.train_loader, prefix="train", label=label, max_batches=1, samples_per_batch=1
+            )
+        }
+        validated = self.run_validation and self.val_loader is not None
+        if validated:
+            logging.info("Running validation...")
+            val_loss, val_scores = self._validate(self.val_loader)
+            metrics["val/loss"] = val_loss
+            metrics.update({f"val/{k}": v for k, v in val_scores.items()})
+            logging.info(
+                "Validation done | val_loss=%.4f | %s",
+                val_loss,
+                " ".join(f"{k}={v:.3f}" for k, v in val_scores.items()),
+            )
+        self._save_checkpoint(self.save_dir / "latest.pt", completed_epochs)
+        if validated and val_loss < self.best_val:
+            self.best_val = val_loss
+            checkpoint = self.save_dir / "best.pt"
+            self._save_checkpoint(checkpoint, completed_epochs)
+            logging.info("New best model saved at %s (val_loss=%.4f)", checkpoint, self.best_val)
+        if validated:
+            metrics["val/best_loss"] = self.best_val
+        images["examples/val"] = self._log_examples(self.val_loader, prefix="val", label=label)
+        self.generator.train()
+        return metrics, images
+
+    def _lr_factor(self, step: int) -> float:
+        if self.warmup_steps and step < self.warmup_steps:
+            return (step + 1) / self.warmup_steps
+        if self.lr_schedule == "cosine":
+            progress = min(step, self.max_steps) / max(1, self.max_steps)
+            floor = self.lr_min / self.base_lr
+            return floor + (1 - floor) * 0.5 * (1 + math.cos(math.pi * progress))
+        if self.lr_schedule == "exponential":
+            return max(self.lr_decay**step, self.lr_min / self.base_lr)
+        return 1.0
+
+    def _set_lr(self) -> float:
+        lr = self.base_lr * self._lr_factor(self.global_step)
+        for opt in (self.opt_g, self.opt_d):
+            if opt is not None:
+                for group in opt.param_groups:
+                    group["lr"] = lr
+        return lr
 
     def _train_one_epoch(self, epoch: int) -> float:
         self.generator.train()
@@ -259,6 +298,7 @@ class Trainer:
         progress_interval = max(1, self.train_steps_per_epoch // 20)
 
         for batch in self.train_loader:
+            lr = self._set_lr()
 
             frames, masked_frames, masks = self._prepare_batch(batch)
             with self.amp():
@@ -365,7 +405,7 @@ class Trainer:
                 )
 
             if self.global_step % self.log_every == 0:
-                step_metrics = {"train/loss": float(loss_g.detach()), "train/rec_loss": rec_loss_val}
+                step_metrics = {"train/loss": float(loss_g.detach()), "train/rec_loss": rec_loss_val, "train/lr": lr}
                 if self.use_gan:
                     step_metrics["train/adv_loss"] = adv_loss_val
                     if loss_d is not None:
@@ -379,6 +419,12 @@ class Trainer:
                     float(loss_g.detach()),
                 )
                 self.logger.log_step(self.global_step, {**step_metrics, **self._gpu_stats()})
+
+            if self.val_every_steps and self.global_step % self.val_every_steps == 0:
+                period_metrics, images = self._evaluate_and_checkpoint(
+                    completed_epochs=epoch - 1, label=f"step{self.global_step}"
+                )
+                self.logger.log_epoch(self.global_step / self.train_steps_per_epoch, period_metrics, images)
 
             if self.global_step >= self.max_steps:
                 break
@@ -410,7 +456,7 @@ class Trainer:
         self,
         loader: DataLoader | None,
         prefix: str,
-        epoch: int,
+        label: str,
         max_batches: int = 5,
         samples_per_batch: int = 1,
     ) -> list[Path]:
@@ -448,7 +494,7 @@ class Trainer:
 
                 seq = torch.cat([gt_color, pd_color], dim=0)
                 grid = make_grid(seq, nrow=gt.shape[0], padding=2)
-                out_path = save_dir / f"{prefix}_epoch{epoch}_batch{b_idx}_ex{idx}.png"
+                out_path = save_dir / f"{prefix}_{label}_batch{b_idx}_ex{idx}.png"
                 save_image(grid, out_path)
                 self._annotate_image(
                     out_path,
