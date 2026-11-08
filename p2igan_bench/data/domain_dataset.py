@@ -6,8 +6,9 @@ with rain rate on the P2I scale (``p2igan_bench.codec``).
 
 from __future__ import annotations
 
+import csv
+
 import numpy as np
-import pandas as pd
 import torch
 import zarr
 
@@ -23,10 +24,11 @@ def encode(raw: torch.Tensor) -> torch.Tensor:
 
 def gauge_pixels(csv_path: str, easting: np.ndarray, northing: np.ndarray) -> np.ndarray:
     """Unique (row, col) of the gauges in the store's grid; gauges outside the grid are dropped."""
-    table = pd.read_csv(csv_path)
+    with open(csv_path, newline="") as f:
+        table = [(int(float(r["PixelE"])), int(float(r["PixelN"]))) for r in csv.DictReader(f)]
     col = {int(e): i for i, e in enumerate(easting)}
     row = {int(n): i for i, n in enumerate(northing)}
-    pix = {(row[n], col[e]) for e, n in zip(table["PixelE"], table["PixelN"], strict=True) if e in col and n in row}
+    pix = {(row[n], col[e]) for e, n in table if e in col and n in row}
     return np.array(sorted(pix), dtype=np.int64)
 
 
