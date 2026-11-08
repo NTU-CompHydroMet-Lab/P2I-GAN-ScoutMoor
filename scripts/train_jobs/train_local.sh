@@ -19,8 +19,8 @@ cp "${CONFIG_PATH}" "${CONFIG_SNAP}"
 
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export OMP_NUM_THREADS=${OMP_NUM_THREADS:-4}
-export MLFLOW_ALLOW_FILE_STORE=true
-export MLFLOW_DISABLE_AGENT_HINT=1
+# Online by default; export WANDB_MODE=offline to log locally and push later with `wandb sync`.
+export WANDB_MODE=${WANDB_MODE:-online}
 
 uv run python scripts/train.py \
   --config "${CONFIG_SNAP}" \

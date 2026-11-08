@@ -126,6 +126,8 @@ class Config(_Strict):
     save_dir: str = "weights"
     experiment_name: str | None = None
     run_name: str | None = None
+    log_to_wandb: bool = False
+    wandb_project: str = "p2igan-scoutmoor"
     description: str = ""
     model: ModelConfig
     data: DataConfig

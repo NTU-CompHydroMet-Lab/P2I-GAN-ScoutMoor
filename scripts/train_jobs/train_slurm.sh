@@ -5,7 +5,7 @@
 #
 #   Usage: scripts/train_jobs/train_slurm.sh <config_path> <run_name>
 #     config_path  JSON config file
-#     run_name     run directory under weights/ and MLflow run name
+#     run_name     run directory under weights/ and W&B run name
 #
 # The job trains from the CONFIG SNAPSHOT, not the live config: editing the JSON
 # while the job sits in the queue cannot change what it runs.

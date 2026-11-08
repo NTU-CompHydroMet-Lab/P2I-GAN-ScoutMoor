@@ -29,13 +29,14 @@ def _smoke_config(config_name, tmp_path, monkeypatch):
     if not (H5_ROOT / "train").is_dir() or not (H5_ROOT / "test").is_dir():
         pytest.skip("missing datasets/nimrod_h5")
     monkeypatch.chdir(ROOT)
-    monkeypatch.setenv("MLFLOW_TRACKING_URI", (tmp_path / "mlruns").as_uri())
-    monkeypatch.setenv("MLFLOW_ALLOW_FILE_STORE", "true")
+    monkeypatch.setenv("WANDB_MODE", "offline")
+    monkeypatch.setenv("WANDB_SILENT", "true")
 
     cfg = json.loads((CONFIG_DIR / config_name).read_text())
     cfg["device"] = "cuda:0" if torch.cuda.is_available() else "cpu"
     cfg["save_dir"] = str(tmp_path / "weights")
     cfg["experiment_name"] = "smoke"
+    cfg["log_to_wandb"] = True
     cfg["data"]["train"]["data_root"] = str(_link_events(H5_ROOT / "train", tmp_path / "train", 2))
     cfg["data"]["valid"]["data_root"] = str(_link_events(H5_ROOT / "test", tmp_path / "valid", 1))
     cfg["train"].update(batch_size=1, num_workers=0, persistent_workers=False, iterations=2)
@@ -73,7 +74,8 @@ def test_resume_continues_from_latest(tmp_path, monkeypatch):
 
     cfg["train"]["iterations"] = 4
     second = train.Trainer(cfg)
-    assert (second.global_step, second.start_epoch, second.mlflow_run_id) == (2, 2, first.mlflow_run_id)
+    assert first.wandb_run_id is not None
+    assert (second.global_step, second.start_epoch, second.wandb_run_id) == (2, 2, first.wandb_run_id)
     for name, value in second.generator.state_dict().items():
         assert torch.equal(value.cpu(), saved["generator"][name]), name
     second.train()

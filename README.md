@@ -129,22 +129,20 @@ In our experiments the data sources are **Nimrod (radar)** and **MIDAS (rain gau
 ## Training
 Training configs are in [`p2igan_bench/config/`](./p2igan_bench/config/).
 
-Run one of the following commands for training:
+Training logs to [Weights & Biases](https://wandb.ai) when the config sets `"log_to_wandb": true` (project `wandb_project`, run name `run_name`, group `experiment_name`). Log in once with `uv run wandb login`; set `WANDB_MODE=offline` to log locally and upload later with `wandb sync`.
+
+Each run lives in its own directory, `weights/<run_name>/`, and resumes from `latest.pt` there; use a new run name for a fresh start.
+
 ```shell
- # For training P2IGAN
- python scripts/train.py --config p2igan_bench/config/p2igan_gan_baseline.json
- 
- # MLflow 3 refuses the ./mlruns file store unless this is set
- export MLFLOW_ALLOW_FILE_STORE=true
+# Local run with a config snapshot and console log under weights/<run_name>/logs/
+scripts/train_jobs/train_local.sh p2igan_bench/config/p2igan_gan_domain.json domain-v2
 
- # For monitoring in mlflow
- mlflow ui --backend-store-uri file:<project_path>/mlruns --port 5000
+# The same on slurm (edit --account/--partition in scripts/train_jobs/sbatch_script.sh first)
+scripts/train_jobs/train_slurm.sh p2igan_bench/config/p2igan_gan_domain.json domain-v2
 
-  # For infer P2IGAN
- python scripts/infer.py --config p2igan_bench/config/p2igan_gan_baseline.json
-
+# Inference
+python scripts/infer.py --config p2igan_bench/config/p2igan_gan_baseline.json
 ```
-
 
 ## Evaluation
 Run from the repository root:

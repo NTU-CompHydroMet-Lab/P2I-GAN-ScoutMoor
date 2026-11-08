@@ -4,6 +4,8 @@
     "save_dir": "weights/p2igan_gan_domain_v1",
     "experiment_name": "p2igan-gan-domain",
     "run_name": "domain-v1",
+    "log_to_wandb": true,
+    "wandb_project": "p2igan-scoutmoor",
     "description": "P2I-GAN+ (v9 settings) on the Scout Moor/Manchester domain, NIMROD 2020-2023, input at 176 gauge pixels.",
     "model": {
         "name": "p2igan",

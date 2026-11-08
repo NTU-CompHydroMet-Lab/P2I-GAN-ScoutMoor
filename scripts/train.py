@@ -2,17 +2,14 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import json
 import logging
 import math
-import os
 import random
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
 import matplotlib
-import mlflow
 import numpy as np
 import torch
 from PIL import Image, ImageDraw, ImageFont
@@ -24,6 +21,7 @@ from p2igan_bench.config import load_config, validate_config
 from p2igan_bench.data.dataloader import P2IDataModule
 from p2igan_bench.models import build_discriminator, build_generator
 from p2igan_bench.modules import ReconstructionLoss, gan_loss
+from p2igan_bench.run_logger import RunLogger
 
 
 def parse_args() -> argparse.Namespace:
@@ -35,9 +33,8 @@ def parse_args() -> argparse.Namespace:
         help="Path to JSON/YAML config file.",
     )
     parser.add_argument("--save-dir", type=Path, default=None, help="Run directory; overrides save_dir in the config")
-    parser.add_argument("--experiment-name", type=str, default=None, help="MLflow experiment name")
-    parser.add_argument("--run-name", type=str, default=None, help="MLflow run name")
-    parser.add_argument("--tracking-uri", type=str, default=None, help="Optional MLflow tracking URI")
+    parser.add_argument("--experiment-name", type=str, default=None, help="W&B group")
+    parser.add_argument("--run-name", type=str, default=None, help="W&B run name")
     parser.add_argument("--log-level", type=str, default="INFO", help="Logging level (DEBUG, INFO, WARNING)")
     parser.add_argument(
         "--run-validation",
@@ -60,19 +57,6 @@ def seed_everything(seed: int) -> None:
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-
-
-def flatten_dict(data: dict[str, Any], parent_key: str = "") -> dict[str, Any]:
-    items: dict[str, Any] = {}
-    for key, value in data.items():
-        new_key = f"{parent_key}.{key}" if parent_key else key
-        if isinstance(value, dict):
-            items.update(flatten_dict(value, new_key))
-        elif isinstance(value, (list, tuple)):
-            items[new_key] = json.dumps(value)
-        elif value is not None:
-            items[new_key] = value
-    return items
 
 
 class Trainer:
@@ -150,7 +134,8 @@ class Trainer:
         self.viz_vmax = viz_cfg.get("vmax")
 
         self.start_epoch = 1
-        self.mlflow_run_id = None
+        self.wandb_run_id = None
+        self.logger = RunLogger(False, "", None, None, None, self.save_dir, {})
         self._maybe_resume()
 
         torch.backends.cudnn.benchmark = bool(train_cfg.get("cudnn_benchmark", False))
@@ -180,7 +165,7 @@ class Trainer:
         self.global_step = int(state["global_step"])
         self.start_epoch = int(state["epoch"]) + 1
         self.best_val = float(state.get("best_val", float("inf")))
-        self.mlflow_run_id = state.get("mlflow_run_id")
+        self.wandb_run_id = state.get("wandb_run_id")
         logging.info(
             "Resumed from %s: epoch %d done, global_step %d, best_val %.4f",
             path,
@@ -189,62 +174,69 @@ class Trainer:
             self.best_val,
         )
 
-    def _log_gpu_stats(self) -> None:
+    def _gpu_stats(self) -> dict[str, float]:
         if self.device.type != "cuda" or not torch.cuda.is_available():
-            return
+            return {}
         alloc = torch.cuda.memory_allocated(self.device) / 1e6
         reserved = torch.cuda.memory_reserved(self.device) / 1e6
         logging.info("GPU mem | allocated=%.1fMB reserved=%.1fMB", alloc, reserved)
-        mlflow.log_metric("gpu/allocated_mb", alloc, step=self.global_step)
-        mlflow.log_metric("gpu/reserved_mb", reserved, step=self.global_step)
+        return {"perf/gpu_allocated_mb": alloc, "perf/gpu_reserved_mb": reserved}
 
     def train(self) -> None:
-        experiment_name = self.cfg.get("experiment_name")
-        if experiment_name:
-            mlflow.set_experiment(experiment_name)
-
-        run_name = self.cfg.get("run_name")
         if self.global_step >= self.max_steps:
             logging.info("Already at max steps (%d); nothing to train.", self.max_steps)
             return
-        with mlflow.start_run(run_id=self.mlflow_run_id, run_name=None if self.mlflow_run_id else run_name):
-            if self.mlflow_run_id is None:
-                mlflow.log_params(flatten_dict(self.cfg))
-                self.mlflow_run_id = mlflow.active_run().info.run_id
+        self.logger = RunLogger(
+            enabled=bool(self.cfg.get("log_to_wandb", False)),
+            project=self.cfg.get("wandb_project", "p2igan-scoutmoor"),
+            name=self.cfg.get("run_name"),
+            group=self.cfg.get("experiment_name"),
+            run_id=self.wandb_run_id,
+            out_dir=self.save_dir,
+            config={
+                **self.cfg,
+                "train_samples": len(self.train_loader.dataset),
+                "val_samples": len(self.val_loader.dataset) if self.val_loader is not None else 0,
+            },
+        )
+        self.wandb_run_id = self.logger.run_id
+        try:
             for epoch in range(self.start_epoch, self.max_epochs + 1):
                 logging.info("Epoch %d/%d starting...", epoch, self.max_epochs)
                 train_loss = self._train_one_epoch(epoch)
-                mlflow.log_metric("train/loss", train_loss, step=self.global_step)
-                mlflow.log_metric("train/rec_loss_epoch", self.last_rec_loss, step=self.global_step)
+                metrics = {"epoch/train_loss": train_loss, "epoch/rec_loss": self.last_rec_loss}
                 if self.use_gan:
-                    mlflow.log_metric("train/adv_loss_epoch", self.last_adv_loss, step=self.global_step)
-                    mlflow.log_metric("train/dis_loss_epoch", self.last_dis_loss, step=self.global_step)
+                    metrics.update({"epoch/adv_loss": self.last_adv_loss, "epoch/dis_loss": self.last_dis_loss})
                 logging.info("Epoch %d completed | train_loss=%.4f | global_step=%d", epoch, train_loss, self.global_step)
-                self._log_examples(self.train_loader, prefix="train", epoch=epoch, max_batches=1, samples_per_batch=1)
+                images = {
+                    "examples/train": self._log_examples(
+                        self.train_loader, prefix="train", epoch=epoch, max_batches=1, samples_per_batch=1
+                    )
+                }
 
-                if self.run_validation and self.val_loader is not None:
+                validated = self.run_validation and self.val_loader is not None
+                if validated:
                     logging.info("Running validation...")
                     val_loss = self._evaluate_rec_loss(self.val_loader)
-                    mlflow.log_metric("val/loss", val_loss, step=self.global_step)
+                    metrics["val/loss"] = val_loss
                     logging.info("Validation done | val_loss=%.4f", val_loss)
 
-                   # 2) 每次都存最新版 latest.pt（覆蓋）
-                latest_ckpt = self.save_dir / "latest.pt"
-                self._save_checkpoint(latest_ckpt, epoch)
-                mlflow.log_artifact(str(latest_ckpt))
-                
-                if self.run_validation and self.val_loader is not None and val_loss < self.best_val:
+                self._save_checkpoint(self.save_dir / "latest.pt", epoch)
+                if validated and val_loss < self.best_val:
                     self.best_val = val_loss
                     checkpoint = self.save_dir / "best.pt"
                     self._save_checkpoint(checkpoint, epoch)
-                    mlflow.log_artifact(str(checkpoint))
                     logging.info("New best model saved at %s (val_loss=%.4f)", checkpoint, self.best_val)
-                self._log_examples(self.val_loader, prefix="val", epoch=epoch)
+                if validated:
+                    metrics["val/best_loss"] = self.best_val
+                images["examples/val"] = self._log_examples(self.val_loader, prefix="val", epoch=epoch)
+                self.logger.log_epoch(epoch, metrics, images)
 
                 if self.global_step >= self.max_steps:
                     logging.info("Reached max steps (%d). Stopping training.", self.max_steps)
                     break
-    
+        finally:
+            self.logger.finish()
 
     def _train_one_epoch(self, epoch: int) -> float:
         self.generator.train()
@@ -365,14 +357,12 @@ class Trainer:
                 )
 
             if self.global_step % self.log_every == 0:
-                mlflow.log_metric("train/step_loss", float(loss_g.detach()), step=self.global_step)
-                mlflow.log_metric("train/rec_loss_step", rec_loss_val, step=self.global_step)
+                step_metrics = {"train/loss": float(loss_g.detach()), "train/rec_loss": rec_loss_val}
                 if self.use_gan:
-                    mlflow.log_metric("train/adv_loss_step", adv_loss_val, step=self.global_step)
+                    step_metrics["train/adv_loss"] = adv_loss_val
                     if loss_d is not None:
-                        mlflow.log_metric("train/dis_loss_step", float(loss_d.detach()), step=self.global_step)
-                for key, value in loss_dict.items():
-                    mlflow.log_metric(f"train/{key}", value, step=self.global_step)
+                        step_metrics["train/dis_loss"] = float(loss_d.detach())
+                step_metrics.update({f"train/{key}": value for key, value in loss_dict.items()})
                 logging.info(
                     "Epoch %d | step %d/%d | loss=%.4f",
                     epoch,
@@ -380,7 +370,7 @@ class Trainer:
                     self.max_steps,
                     float(loss_g.detach()),
                 )
-                self._log_gpu_stats()
+                self.logger.log_step(self.global_step, {**step_metrics, **self._gpu_stats()})
 
             if self.global_step >= self.max_steps:
                 break
@@ -413,9 +403,10 @@ class Trainer:
         epoch: int,
         max_batches: int = 5,
         samples_per_batch: int = 1,
-    ) -> None:
+    ) -> list[Path]:
+        paths: list[Path] = []
         if loader is None:
-            return
+            return paths
         self.generator.eval()
         save_dir = self.save_dir / "artifacts"
         save_dir.mkdir(parents=True, exist_ok=True)
@@ -454,7 +445,8 @@ class Trainer:
                     f"GT min/mean/max: {gt_stats[0]:.3f}/{gt_stats[1]:.3f}/{gt_stats[2]:.3f} | "
                     f"Pred min/mean/max: {pd_stats[0]:.3f}/{pd_stats[1]:.3f}/{pd_stats[2]:.3f} | cmap=viridis",
                 )
-                mlflow.log_artifact(str(out_path))
+                paths.append(out_path)
+        return paths
 
     def _colorize_sequence(self, seq: torch.Tensor, vmin: float | None = None, vmax: float | None = None):
         # seq: [T, C, H, W]
@@ -504,7 +496,7 @@ class Trainer:
             "generator": self.generator.state_dict(),
             "optimizer_g": self.opt_g.state_dict(),
             "best_val": self.best_val,
-            "mlflow_run_id": self.mlflow_run_id,
+            "wandb_run_id": self.wandb_run_id,
         }
         if self.discriminator is not None and self.opt_d is not None:
             state["discriminator"] = self.discriminator.state_dict()
@@ -523,10 +515,6 @@ def main(args: argparse.Namespace | None = None) -> None:
         config["experiment_name"] = parsed.experiment_name
     if parsed.run_name:
         config["run_name"] = parsed.run_name
-    if parsed.tracking_uri:
-        mlflow.set_tracking_uri(parsed.tracking_uri)
-    elif "MLFLOW_TRACKING_URI" in os.environ:
-        mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
     if parsed.run_validation is not None:
         train_cfg["use_validation"] = bool(parsed.run_validation)
 

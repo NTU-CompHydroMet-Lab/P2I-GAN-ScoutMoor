@@ -25,13 +25,13 @@ source .venv/bin/activate
 
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK:?SLURM_CPUS_PER_TASK unset: launch via sbatch}
-export MLFLOW_ALLOW_FILE_STORE=true
-export MLFLOW_DISABLE_AGENT_HINT=1
+# Online by default; export WANDB_MODE=offline to log locally and push later with `wandb sync`.
+export WANDB_MODE=${WANDB_MODE:-online}
 
 python scripts/train.py \
   --config "${CONFIG_PATH}" \
   --save-dir "weights/${RUN_NAME}" \
   --run-name "${RUN_NAME}"
 
-# Resume is automatic from weights/<run_name>/latest.pt (the MLflow run id rides in
+# Resume is automatic from weights/<run_name>/latest.pt (the W&B run id rides in
 # the checkpoint, so the same run continues). For a fresh start, use a new run_name.
