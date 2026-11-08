@@ -1,0 +1,10 @@
+{
+    "description": "Pilot events in the Scout Moor/Manchester domain; windows fixed by matching the radar maxima of the pilot summary.",
+    "events": [
+        {"name": "2013-07-29", "start": "2013-07-29", "days": 1},
+        {"name": "Eva 2015-12", "start": "2015-12-25", "days": 3},
+        {"name": "2016-07-09", "start": "2016-07-09", "days": 1},
+        {"name": "2019-07-28/29", "start": "2019-07-28", "days": 2},
+        {"name": "Darragh 2024-12", "start": "2024-12-06", "days": 3}
+    ]
+}

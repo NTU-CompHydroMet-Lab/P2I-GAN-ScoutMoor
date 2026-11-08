@@ -26,7 +26,7 @@ def test_perfect_prediction_scores():
     torch.manual_seed(0)
     truth = _field(np.random.default_rng(0).gamma(0.5, 4.0, size=(2, 3, 32, 32)))
     mask = torch.zeros_like(truth)
-    scores = RainScores(fss_window=5)
+    scores = RainScores(fss_windows=(5,))
     scores.update(truth, truth, mask)
     out = scores.compute()
     assert out["mae_mmh"] == pytest.approx(0.0, abs=1e-6)
@@ -39,7 +39,7 @@ def test_contingency_counts_ignore_observed_pixels():
     truth = _field([[[0.0, 6.0, 6.0, 0.0]]])
     pred = _field([[[6.0, 6.0, 0.0, 0.0]]])
     mask = torch.tensor([[[0.0, 0.0, 0.0, 1.0]]])
-    scores = RainScores(thresholds=(5.0,), fss_thresholds=(5.0,), fss_window=1)
+    scores = RainScores(thresholds=(5.0,), fss_thresholds=(5.0,), fss_windows=(1,))
     scores.update(pred, truth, mask)
     out = scores.compute()
     # unobserved pixels: pred yes/truth no, yes/yes, no/yes -> 1 hit, 1 false alarm, 1 miss

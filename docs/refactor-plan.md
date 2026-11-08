@@ -45,7 +45,7 @@
 | C 升級 | Python 3.14 與套件、lock、pytest、ruff；torch 固定 2.14.1+cu126；黃金測試改容差比對並涵蓋 NIMROD | B | M | Done |
 | D Config | pydantic schema、`extra="forbid"`、全部 config 重寫；寫入新資料路徑 | C | M | Done |
 | E Trainer | 修 `train.py:217`、`val_every_epochs`、resume、LR 排程；實驗紀錄改用 W&B（抽出 logger 介面） | D | S | In progress |
-| F 編碼與指標 | 單一 `RainCodec` 存進 checkpoint；指標重寫並接上驗證；刪三份舊 transform | D | M | Not started |
+| F 編碼與指標 | 單一 `RainCodec` 存進 checkpoint；指標重寫並接上驗證；刪三份舊 transform | D | M | In progress |
 | G 模型泛化 | T 參數化、H/W 檢查、合併 wopos、DK/STDK 的 k 由遮罩推導；InputBlock 重新設計（見下節） | D | M | Not started |
 | H1 資料探勘 | 各年缺幀、無資料區變動、雷達網年代差異、雨量分布 | C | S | In progress |
 | H2 前處理 | 裁固定區域、重新 chunk、事件篩選、年份切分索引、無資料遮罩 | H1、F、區域決定 | M | Not started |
@@ -135,3 +135,5 @@ A 必須最先：黃金測試要在舊環境建立，後續才能證明行為未
 | 2026-11-08 | — | 新 repo `NTU-CompHydroMet-Lab/P2I-GAN-ScoutMoor` 設為 `origin`，`main` 與 `refactor` 一致；作者原 repo 改名為 `original`，不再推送。Slurm 暫緩，模型小，本機 3080 足夠 |
 | 2026-11-08 | E | 實驗紀錄改用 W&B，取代 MLflow（仿 circqpe）：`p2igan_bench/run_logger.py`，config 的 `log_to_wandb`、`wandb_project`，W&B run id 存進 checkpoint 供續跑；step 指標以 `global_step`、epoch 指標以 `epoch` 為 x 軸，每個 epoch 上傳範例圖。不再把 checkpoint 上傳成 artifact |
 | 2026-11-08 | E/G | Discriminator 改用 `parametrizations.spectral_norm`，可以 compile；載入時把舊鍵名（`weight_orig`/`weight_u`/`weight_v`）改成新鍵名，v9 與 domain-v1 的舊 checkpoint 都能嚴格載入，eval 輸出與舊版逐位元相同。compile 與 bf16 同時開啟可正常訓練與續跑 |
+| 2026-11-08 | F | `p2igan_bench/codec.py`：`RainCodec`（P2I 對數尺度，`v < 1` 解碼為 0），domain dataset 改用它，checkpoint 存 `codec`。`p2igan_bench/metrics/rain.py`：`RainScores` 以 mm/h 累積 MAE、RMSE、bias、POD/FAR/CSI（模型沒看到的像素）與 FSS（全場），驗證時一併計算並記到 W&B；刪掉沒人用、尺度也錯的舊 `metrics/metric.py` 與 torchmetrics 依賴。`experiments/` 的兩份舊轉換仍保留，以免改變作者分析的數字 |
+| 2026-11-08 | F/J | `scripts/eval_events.py` 與 `p2igan_bench/config/eval/pilot_events.json`：對指定事件評估 checkpoint 並與同站點的 IDW 比較，輸出指標、報告與圖。重跑 epoch 7 快照，與先前試跑的數字最大差 0.002（差在 Darragh 有缺測的影格整幀排除） |

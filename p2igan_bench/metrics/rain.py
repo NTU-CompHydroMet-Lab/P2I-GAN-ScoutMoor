@@ -19,18 +19,19 @@ class RainScores:
         codec: RainCodec = P2I_CODEC,
         thresholds: Sequence[float] = (1.0, 5.0, 10.0),
         fss_thresholds: Sequence[float] = (1.0, 5.0),
-        fss_window: int = 11,
+        fss_windows: Sequence[int] = (11,),
     ):
         self.codec = codec
         self.thresholds = tuple(thresholds)
         self.fss_thresholds = tuple(fss_thresholds)
-        self.fss_window = fss_window
+        self.fss_windows = tuple(fss_windows)
         self.reset()
 
     def reset(self) -> None:
         self.abs_sum = self.sq_sum = self.err_sum = self.count = 0.0
         self.table = {thr: [0.0, 0.0, 0.0] for thr in self.thresholds}  # hits, false alarms, misses
-        self.fss_sums = {thr: [0.0, 0.0] for thr in self.fss_thresholds}  # sum (fe-ft)^2, sum fe^2 + ft^2
+        # per (threshold, window): sum (fe - ft)^2, sum fe^2 + ft^2
+        self.fss_sums = {(thr, win): [0.0, 0.0] for thr in self.fss_thresholds for win in self.fss_windows}
 
     @torch.no_grad()
     def update(self, pred: torch.Tensor, target: torch.Tensor, obs_mask: torch.Tensor) -> None:
@@ -52,11 +53,10 @@ class RainScores:
             row[2] += float((~yes_p & yes_t).sum())
         h, w = p.shape[-2:]
         p2, t2 = p.reshape(-1, 1, h, w), t.reshape(-1, 1, h, w)
-        pad = self.fss_window // 2
-        for thr in self.fss_thresholds:
-            fe = F.avg_pool2d((p2 >= thr).float(), self.fss_window, stride=1, padding=pad, count_include_pad=True)
-            ft = F.avg_pool2d((t2 >= thr).float(), self.fss_window, stride=1, padding=pad, count_include_pad=True)
-            sums = self.fss_sums[thr]
+        for (thr, win), sums in self.fss_sums.items():
+            pad = win // 2
+            fe = F.avg_pool2d((p2 >= thr).float(), win, stride=1, padding=pad, count_include_pad=True)
+            ft = F.avg_pool2d((t2 >= thr).float(), win, stride=1, padding=pad, count_include_pad=True)
             sums[0] += float(((fe - ft) ** 2).sum())
             sums[1] += float((fe * fe).sum() + (ft * ft).sum())
 
@@ -67,6 +67,6 @@ class RainScores:
             out[f"pod@{thr:g}mmh"] = hits / max(hits + miss, 1.0)
             out[f"far@{thr:g}mmh"] = fa / max(hits + fa, 1.0)
             out[f"csi@{thr:g}mmh"] = hits / max(hits + fa + miss, 1.0)
-        for thr, (mse, ref) in self.fss_sums.items():
-            out[f"fss@{thr:g}mmh_{self.fss_window}km"] = 1.0 - mse / ref if ref > 0 else float("nan")
+        for (thr, win), (mse, ref) in self.fss_sums.items():
+            out[f"fss@{thr:g}mmh_{win}km"] = 1.0 - mse / ref if ref > 0 else float("nan")
         return out

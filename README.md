@@ -145,7 +145,14 @@ python scripts/infer.py --config p2igan_bench/config/p2igan_gan_baseline.json
 ```
 
 ## Evaluation
-Run from the repository root:
+Evaluate a checkpoint on named events, against IDW from the same gauge pixels. Point and categorical scores (MAE, RMSE, bias, r, POD/FAR/CSI at 1, 5 and 10 mm/h) use pixels away from the gauges; FSS (1, 5, 11, 21 km) and SSIM use the full field. Writes `metrics.json`, `report.md`, a peak panel, a time series and a GIF per event:
+```shell
+python scripts/eval_events.py --config weights/domain-v1/logs/config-<stamp>.json \
+    --checkpoint weights/domain-v1/best.pt --out experiments/results/domain-v1-events
+```
+The event list is `p2igan_bench/config/eval/pilot_events.json`. Validation during training logs the same point, categorical and FSS (11 km) scores to W&B.
+
+The paper's analysis scripts for the legacy MIDAS/Nimrod outputs:
 ```shell
  python -m experiments.main
 ```
