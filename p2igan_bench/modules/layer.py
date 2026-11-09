@@ -141,7 +141,26 @@ def _knn_weights(points_xyz, gp_all, k, rho, tau, chunk, use_cuda_amp):
     return parts
 
 
-def idw_3d_knn(points_xyz, values, out_shape, k=8, rho=2.0, tau=1e-3, chunk=16384, device=None, dtype=None, use_amp=True):
+_GRID_CACHE_MATCHED: dict[tuple[int, int, int, str, torch.dtype], torch.Tensor] = {}
+
+
+def _get_grid_points_matched(D, H, W, device, dtype):
+    """Grid coordinates built as ``arange(n) / (n - 1)``, the same formula the gauge coordinates use, so a
+    grid point sitting on a gauge pixel has an identical coordinate (no float16 linspace tie drift)."""
+    key = (D, H, W, str(device), dtype)
+    gp = _GRID_CACHE_MATCHED.get(key)
+    if gp is None:
+        z = torch.arange(D, device=device, dtype=dtype) / max(D - 1, 1)
+        y = torch.arange(H, device=device, dtype=dtype) / max(H - 1, 1)
+        x = torch.arange(W, device=device, dtype=dtype) / max(W - 1, 1)
+        gz, gy, gx = torch.meshgrid(z, y, x, indexing="ij")
+        gp = torch.stack([gx, gy, gz], dim=-1).reshape(-1, 3).contiguous()
+        _GRID_CACHE_MATCHED[key] = gp
+    return gp
+
+
+def idw_3d_knn(points_xyz, values, out_shape, k=8, rho=2.0, tau=1e-3, chunk=16384, device=None, dtype=None,
+               use_amp=True, grid_points=None):
     if device is None:
         device = points_xyz.device
     if dtype is None:
@@ -151,7 +170,7 @@ def idw_3d_knn(points_xyz, values, out_shape, k=8, rho=2.0, tau=1e-3, chunk=1638
     values = values.to(device=device, dtype=dtype, non_blocking=True)
 
     D, H, W = out_shape
-    gp_all = _get_grid_points(D, H, W, device, dtype)
+    gp_all = _get_grid_points(D, H, W, device, dtype) if grid_points is None else grid_points
     Q = gp_all.shape[0]
     out_vals = torch.empty(Q, device=device, dtype=dtype)
 
@@ -233,6 +252,37 @@ class InputBlock(nn.Module):
         return torch.cat(outputs, dim=0)
 
 
+class RobustInputBlock(nn.Module):
+    """InputBlock without the AttentionBlock gate: plain kNN-IDW on the masked input, in float32, with grid
+    and gauge coordinates on the same formula. No parameters; the kNN stays cached for a fixed gauge mask."""
+
+    def __init__(self, k=4, rho=2.0, tau=0.05, chunk=16384):
+        super().__init__()
+        self.k = k
+        self.rho = rho
+        self.tau = tau
+        self.chunk = chunk
+
+    def forward(self, input, mask):
+        B, D, H, W = input.shape
+        grid = _get_grid_points_matched(D, H, W, input.device, torch.float32)
+        outputs = []
+        for b in range(B):
+            idx = torch.nonzero(mask[b] > 0, as_tuple=True)
+            if len(idx) != 3 or idx[0].numel() == 0:
+                outputs.append(torch.zeros(D, H, W, device=input.device).unsqueeze(0))
+                continue
+            tz, ty, tx = idx
+            points = torch.stack(
+                [tx.float() / max(W - 1, 1), ty.float() / max(H - 1, 1), tz.float() / max(D - 1, 1)], dim=-1
+            )
+            values = input[b][tz, ty, tx]
+            out = idw_3d_knn(points, values, (D, H, W), k=self.k, rho=self.rho, tau=self.tau, chunk=self.chunk,
+                             device=input.device, dtype=torch.float32, use_amp=False, grid_points=grid)
+            outputs.append(out.unsqueeze(0))
+        return torch.cat(outputs, dim=0)
+
+
 class UPPos(nn.Module):
     def __init__(self, in_ch, out_ch, T, H, W):
         super().__init__()
@@ -295,6 +345,7 @@ __all__ = [
     "ResBlock_do",
     "DownsampleDuplicateChannels",
     "InputBlock",
+    "RobustInputBlock",
     "UPPos",
     "UP",
     "C2",

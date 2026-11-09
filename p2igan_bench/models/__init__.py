@@ -5,7 +5,7 @@ from typing import Any
 import torch.nn as nn
 
 from .dk import DKGenerator
-from .p2igan import P2IDiscriminator, P2IGenerator
+from .p2igan import P2IDiscriminator, P2IGenerator, P2IGeneratorV2
 from .p2iganwopos import P2IDiscriminator as P2IDiscriminatorWoPos
 from .p2iganwopos import P2IGenerator as P2IGeneratorWoPos
 from .stdk import STDKGenerator
@@ -26,6 +26,8 @@ def build_generator(cfg: dict[str, Any]) -> nn.Module:
     model_name = _model_name(cfg)
     if model_name == "p2igan":
         return P2IGenerator(cfg)
+    if model_name == "p2igan_v2":
+        return P2IGeneratorV2(cfg)
     if model_name == "p2iganwopos":
         return P2IGeneratorWoPos(cfg)
     if model_name == "dk":
@@ -38,7 +40,7 @@ def build_generator(cfg: dict[str, Any]) -> nn.Module:
 def build_discriminator(cfg: dict[str, Any]) -> nn.Module:
     model_name = _model_name(cfg)
     seq_channels = cfg["model"].get("in_channels", 1) * _sample_length(cfg)
-    if model_name == "p2igan":
+    if model_name in ("p2igan", "p2igan_v2"):
         return P2IDiscriminator(in_channels=seq_channels)
     if model_name == "p2iganwopos":
         return P2IDiscriminatorWoPos(in_channels=seq_channels)
@@ -49,6 +51,7 @@ __all__ = [
     "build_generator",
     "build_discriminator",
     "P2IGenerator",
+    "P2IGeneratorV2",
     "P2IDiscriminator",
     "P2IGeneratorWoPos",
     "P2IDiscriminatorWoPos",

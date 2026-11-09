@@ -14,6 +14,7 @@ from p2igan_bench.modules.layer import (
     DownsampleDuplicateChannels,
     InputBlock,
     ResBlock_do,
+    RobustInputBlock,
     UPPos,
     spectral_norm,
     upgrade_spectral_norm_keys,
@@ -102,6 +103,15 @@ class P2IGenerator(BaseNetwork):
 
         output = torch.tanh(z).view(b, t, c, h, w)
         return output
+
+
+class P2IGeneratorV2(P2IGenerator):
+    """P2I-GAN with a robustness-only InputBlock: plain float32 kNN-IDW, no AttentionBlock. Everything
+    downstream is identical to ``P2IGenerator``."""
+
+    def __init__(self, config, length: int = 16, num_res: int = 4, init_weights: bool = True):
+        super().__init__(config, length=length, num_res=num_res, init_weights=init_weights)
+        self.input = RobustInputBlock(k=4, rho=2.0, tau=0.05, chunk=16384)
 
 
 class P2IDiscriminator(BaseNetwork):

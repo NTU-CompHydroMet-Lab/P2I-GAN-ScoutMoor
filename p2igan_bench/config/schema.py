@@ -17,7 +17,7 @@ class _Strict(BaseModel):
 
 
 class ModelConfig(_Strict):
-    name: Literal["p2igan", "p2iganwopos", "dk", "stdk"]
+    name: Literal["p2igan", "p2igan_v2", "p2iganwopos", "dk", "stdk"]
     in_channels: int = 1
     out_channels: int = 1
 

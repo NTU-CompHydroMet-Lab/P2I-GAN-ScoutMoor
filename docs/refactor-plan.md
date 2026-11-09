@@ -46,7 +46,7 @@
 | D Config | pydantic schema、`extra="forbid"`、全部 config 重寫；寫入新資料路徑 | C | M | Done |
 | E Trainer | 修 `train.py:217`、`val_every_epochs`、resume、LR 排程；實驗紀錄改用 W&B（抽出 logger 介面） | D | S | Done |
 | F 編碼與指標 | 單一 `RainCodec` 存進 checkpoint；指標重寫並接上驗證；刪三份舊 transform | D | M | Done |
-| G 模型泛化 | T 參數化、H/W 檢查、合併 wopos、DK/STDK 的 k 由遮罩推導；InputBlock 重新設計（見下節） | D | M | Not started |
+| G 模型泛化 | T 參數化、H/W 檢查、合併 wopos、DK/STDK 的 k 由遮罩推導；InputBlock 重新設計（見下節） | D | M | In progress |
 | H1 資料探勘 | 各年缺幀、無資料區變動、雷達網年代差異、雨量分布 | C | S | In progress |
 | H2 前處理 | 裁固定區域、重新 chunk、事件篩選、年份切分索引、無資料遮罩 | H1、F、區域決定 | M | Not started |
 | H3 Dataset | 單一 Zarr Dataset、單位與尺寸檢查、地理固定遮罩 | H2、D | M | In progress |
@@ -140,3 +140,4 @@ A 必須最先：黃金測試要在舊環境建立，後續才能證明行為未
 | 2026-11-08 | E | `train.val_every_steps`：依步數驗證、存 `latest.pt`/`best.pt` 並輸出範例圖，訓練結束若不在格點上會再存一次；預設不設，維持每個 epoch 一次。`optimizer.lr_schedule`（`constant`/`cosine`/`exponential`，搭配 `lr_min`、`lr_decay`、`warmup_steps`），LR 每步由 `global_step` 算出，續跑不需 scheduler 狀態；預設 `constant`，與原行為相同。訓練迴圈改以總步數為準，epoch 中途存檔續跑時不會提早結束。原 config 的 `decay: 0.99995` 從未生效 |
 | 2026-11-08 | J | domain-v1 跑完 200,000 步（27 epoch）。驗證 loss 最低 0.2198 在 epoch 7（`best.pt`），之後在 0.220–0.227 間起伏、最後幾個 epoch 略升，輕微過擬合；最終 0.2250（`latest.pt`） |
 | 2026-11-08 | E | 環境同步：加入 wandb、移除 mlflow 與 torchmetrics。pandas 原本是 mlflow 帶進來的隱性依賴，站點表改用標準函式庫 `csv` 讀取。全套 46 個測試通過。3080 上同一批量測（主機另有負載，絕對值比早上低）：無開關 3.66 it/s、cudnn+compile（含 discriminator）3.80、cudnn+bf16 5.45、三者全開 6.05 |
+| 2026-11-10 | G | 新增 `p2igan_v2`（`P2IGeneratorV2` + `RobustInputBlock`）：穩健化的 InputBlock——拿掉 AttentionBlock、IDW 一律 float32、網格座標改用 `arange/(n-1)` 與站點座標同一公式（`_get_grid_points_matched`）。舊 `InputBlock`、`idw_3d_knn` 預設路徑、黃金測試完全不變（`idw_3d_knn` 加 `grid_points=None` 選項）。驗證：RobustInputBlock == 純 float32 IDW；站點那格網格座標與站點座標逐位元相同（linspace/torch 版本漂移消失）；但規則網格的平手仍讓 CPU/CUDA 差最大 0.22（連續權重屬後續）。網路結構與輸入不變，與 domain-v1 僅差 InputBlock，可乾淨 A/B |
