@@ -114,6 +114,62 @@ class P2IGeneratorV2(P2IGenerator):
         self.input = RobustInputBlock(k=4, rho=2.0, tau=0.05, chunk=16384)
 
 
+class P2IGeneratorV3(P2IGeneratorV2):
+    """P2I-GAN with the robust InputBlock, plus: the masked observations and the mask are fed to the first
+    conv as extra channels (so the net can tell a dry gauge from a non-gauge), and the output is composited
+    so gauge pixels copy the observation exactly (``out = mask*obs + (1-mask)*net``)."""
+
+    def __init__(self, config, length: int = 16, num_res: int = 4, init_weights: bool = True):
+        super().__init__(config, length=length, num_res=num_res, init_weights=init_weights)
+        t = config["data"]["train"].get("sample_length", length)
+        # IDW field + masked observations + mask = 3 * t channels into the first conv.
+        self.Convsin = nn.ModuleList([BasicConv_do(3 * t, 64, kernel_size=3, relu=False, stride=1, groups=4)])
+        if init_weights:
+            self.init_weights()
+
+    def forward(self, masked_frames, masks):
+        b, t, c, h, w = masked_frames.size()
+        obs = masked_frames.view(b, c * t, h, w)
+        m = masks.view(b, c * t, h, w)
+
+        x = self.input(obs, m).float()
+        feat = torch.cat([x, obs, m], dim=1)
+        x_ = self.Convsin[0](feat) + x.repeat_interleave(4, dim=1)
+        x_ = x_.view(b, t * c * 4, h, w)
+        x_2 = self.downsample(x_)
+        x_4 = self.downsample(x_2)
+        x_8 = self.downsample(x_4)
+
+        use_amp = masked_frames.device.type == "cuda"
+        with torch.amp.autocast("cuda", enabled=use_amp):
+            x_2 = x_2.float()
+            x_4 = x_4.float()
+            x_8 = x_8.float()
+
+        res1 = self.Decoder[3](x_8)
+        res1 = res1 + torch.zeros_like(x_8, requires_grad=True)
+        res1 = self.UP[2](res1)
+
+        x_4 = x_4 + res1
+        x_4 = x_4 + torch.zeros_like(x_4, requires_grad=True)
+        res2 = self.Decoder[2](x_4)
+        res2 = self.UP[1](res2)
+
+        x_2 = res2
+        x_2 = x_2 + torch.zeros_like(x_2, requires_grad=True)
+        res3 = self.Decoder[1](x_2)
+        res3 = self.UP[0](res3)
+
+        x_ = res3
+        x_ = x_ + torch.zeros_like(x_, requires_grad=True)
+        z = self.Decoder[0](x_)
+        z = z + torch.zeros_like(z, requires_grad=True)
+        z = self.ConvsOut[0](z)
+
+        net = torch.tanh(z).view(b, t, c, h, w)
+        return masks * masked_frames + (1.0 - masks) * net
+
+
 class P2IDiscriminator(BaseNetwork):
     def __init__(self, in_channels: int = 16, init_weights: bool = True):
         super().__init__()
